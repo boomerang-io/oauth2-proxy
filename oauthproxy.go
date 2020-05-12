@@ -399,14 +399,23 @@ func (p *OAuthProxy) SignInPage(rw http.ResponseWriter, req *http.Request, code 
 		redirectURL = "/"
 	}
 
+	isAuthError := false
+	if code == http.StatusUnauthorized {
+		isAuthError = true
+	} else {
+		isAuthError = false
+	}
+
 	t := struct {
 		ProviderName  string
-		SignInMessage template.HTML
+		SignInMessage string
 		CustomLogin   bool
 		Redirect      string
 		Version       string
 		ProxyPrefix   string
 		Footer        template.HTML
+		Error         bool
+		FormAction    string
 	}{
 		ProviderName:  p.provider.Data().ProviderName,
 		SignInMessage: template.HTML(p.SignInMessage),
@@ -415,6 +424,8 @@ func (p *OAuthProxy) SignInPage(rw http.ResponseWriter, req *http.Request, code 
 		Version:       VERSION,
 		ProxyPrefix:   p.ProxyPrefix,
 		Footer:        template.HTML(p.Footer),
+		Error:         isAuthError,
+		FormAction:    req.URL.RequestURI(),
 	}
 	if p.providerNameOverride != "" {
 		t.ProviderName = p.providerNameOverride
@@ -636,12 +647,17 @@ func (p *OAuthProxy) SignIn(rw http.ResponseWriter, req *http.Request) {
 	if ok {
 		session := &sessionsapi.SessionState{User: user}
 		p.SaveSession(rw, req, session)
-		http.Redirect(rw, req, redirect, http.StatusFound)
+		http.Redirect(rw, req, redirect, 302)
 	} else {
 		if p.SkipProviderButton {
 			p.OAuthStart(rw, req)
 		} else {
-			p.SignInPage(rw, req, http.StatusOK)
+			user := req.FormValue("username")
+			if user == "" {
+				p.SignInPage(rw, req, http.StatusOK)
+			} else {
+				p.SignInPage(rw, req, http.StatusUnauthorized)
+			}
 		}
 	}
 }
