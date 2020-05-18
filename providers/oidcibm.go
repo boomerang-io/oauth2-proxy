@@ -46,7 +46,7 @@ func (p *OIDCIBMidProvider) Redeem(ctx context.Context, redirectURL, code string
 		RedirectURL: redirectURL,
 	}
 	// 20180629 - TL: Added logging
-	//fmt.Printf("Client ID: %s\n", p.ClientID)
+	fmt.Printf("Client ID: %s\n", p.ClientID)
 	//fmt.Printf("Client Secret: %s\n", p.ClientSecret)
 	//fmt.Printf("Token URL: %s\n", p.RedeemURL.String())
 	//fmt.Printf("Redirect URL: %s\n", redirectURL)
