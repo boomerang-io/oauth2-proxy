@@ -28,7 +28,7 @@ Valid providers are :
 
 The provider can be selected using the `provider` configuration value.
 
-Please note that not all provides support all claims. The `preferred_username` claim is currently only supported by the OpenID Connect provider.
+Please note that not all providers support all claims. The `preferred_username` claim is currently only supported by the OpenID Connect provider.
 
 ### Google Auth Provider
 
@@ -103,6 +103,8 @@ Note: When using the Azure Auth provider with nginx and the cookie session store
 
 The GitHub auth provider supports two additional ways to restrict authentication to either organization and optional team level access, or to collaborators of a repository. Restricting by these options is normally accompanied with `--email-domain=*`
 
+NOTE: When `--github-user` is set, the specified users are allowed to login even if they do not belong to the specified org and team or collaborators.
+
 To restrict by organization only, include the following flag:
 
     -github-org="": restrict logins to members of this organisation
@@ -118,6 +120,10 @@ If you would rather restrict access to collaborators of a repository, those user
 If you'd like to allow access to users with **read only** access to a **public** repository you will need to provide a [token](https://github.com/settings/tokens) for a user that has write access to the repository. The token must be created with at least the `public_repo` scope:
 
     -github-token="": the token to use when verifying repository collaborators
+
+To allow a user to login with their username even if they do not belong to the specified org and team or collaborators, separated by a comma
+
+    -github-user="": allow logins by username, separated by a comma
 
 If you are using GitHub enterprise, make sure you set the following to the appropriate url:
 
@@ -176,10 +182,11 @@ Take note of your `TenantId` if applicable for your situation. The `TenantId` ca
 
 OpenID Connect is a spec for OAUTH 2.0 + identity that is implemented by many major providers and several open source projects. This provider was originally built against CoreOS Dex and we will use it as an example.
 
-1.  Launch a Dex instance using the [getting started guide](https://github.com/coreos/dex/blob/master/Documentation/getting-started.md).
-2.  Setup oauth2-proxy with the correct provider and using the default ports and callbacks.
-3.  Login with the fixture use in the dex guide and run the oauth2-proxy with the following args:
+1. Launch a Dex instance using the [getting started guide](https://github.com/coreos/dex/blob/master/Documentation/getting-started.md).
+2. Setup oauth2-proxy with the correct provider and using the default ports and callbacks.
+3. Login with the fixture use in the dex guide and run the oauth2-proxy with the following args:
 
+```
     -provider oidc
     -provider-display-name "My OIDC Provider"
     -client-id oauth2-proxy
@@ -188,6 +195,7 @@ OpenID Connect is a spec for OAUTH 2.0 + identity that is implemented by many ma
     -oidc-issuer-url http://127.0.0.1:5556
     -cookie-secure=false
     -email-domain example.com
+```
 
 The OpenID Connect Provider (OIDC) can also be used to connect to other Identity Providers such as Okta. To configure the OIDC provider for Okta, perform
 the following steps:

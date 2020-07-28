@@ -124,7 +124,6 @@ func newOIDCServer(body []byte) (*url.URL, *httptest.Server) {
 }
 
 func newSignedTestIDToken(tokenClaims idTokenClaims) (string, error) {
-
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
 	standardClaims := jwt.NewWithClaims(jwt.SigningMethodRS256, tokenClaims)
 	return standardClaims.SignedString(key)
@@ -204,8 +203,8 @@ func TestOIDCProviderRefreshSessionIfNeededWithoutIdToken(t *testing.T) {
 	existingSession := &sessions.SessionState{
 		AccessToken:  "changeit",
 		IDToken:      idToken,
-		CreatedAt:    time.Time{},
-		ExpiresOn:    time.Time{},
+		CreatedAt:    nil,
+		ExpiresOn:    nil,
 		RefreshToken: refreshToken,
 		Email:        "janedoe@example.com",
 		User:         "11223344",
@@ -238,8 +237,8 @@ func TestOIDCProviderRefreshSessionIfNeededWithIdToken(t *testing.T) {
 	existingSession := &sessions.SessionState{
 		AccessToken:  "changeit",
 		IDToken:      "changeit",
-		CreatedAt:    time.Time{},
-		ExpiresOn:    time.Time{},
+		CreatedAt:    nil,
+		ExpiresOn:    nil,
 		RefreshToken: refreshToken,
 		Email:        "changeit",
 		User:         "changeit",

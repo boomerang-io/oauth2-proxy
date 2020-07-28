@@ -4,6 +4,54 @@
 
 ## Important Notes
 
+- [#632](https://github.com/oauth2-proxy/oauth2-proxy/pull/632) There is backwards compatibility to sessions from v5
+  - Any unencrypted sessions from before v5 that only contained a Username & Email will trigger a reauthentication
+
+## Breaking Changes
+
+## Changes since v6.0.0
+
+- [#699](https://github.com/oauth2-proxy/oauth2-proxy/pull/699) Align persistence ginkgo tests with conventions (@NickMeves)
+- [#696](https://github.com/oauth2-proxy/oauth2-proxy/pull/696) Preserve query when building redirect
+- [#561](https://github.com/oauth2-proxy/oauth2-proxy/pull/561) Refactor provider URLs to package level vars (@JoelSpeed)
+- [#682](https://github.com/oauth2-proxy/oauth2-proxy/pull/682) Refactor persistent session store session ticket management (@NickMeves)
+- [#688](https://github.com/oauth2-proxy/oauth2-proxy/pull/688) Refactor session loading to make use of middleware pattern (@JoelSpeed)
+- [#593](https://github.com/oauth2-proxy/oauth2-proxy/pull/593) Integrate upstream package with OAuth2 Proxy (@JoelSpeed)
+- [#687](https://github.com/oauth2-proxy/oauth2-proxy/pull/687) Refactor HTPasswd Validator (@JoelSpeed)
+- [#624](https://github.com/oauth2-proxy/oauth2-proxy/pull/624) Allow stripping authentication headers from whitelisted requests with `--skip-auth-strip-headers` (@NickMeves)
+- [#673](https://github.com/oauth2-proxy/oauth2-proxy/pull/673) Add --session-cookie-minimal option to create session cookies with no tokens (@NickMeves)
+- [#632](https://github.com/oauth2-proxy/oauth2-proxy/pull/632) Reduce session size by encoding with MessagePack and using LZ4 compression (@NickMeves)
+- [#675](https://github.com/oauth2-proxy/oauth2-proxy/pull/675) Fix required ruby version and deprecated option for building docs (@mkontani)
+- [#669](https://github.com/oauth2-proxy/oauth2-proxy/pull/669) Reduce docker context to improve build times (@JoelSpeed)
+- [#668](https://github.com/oauth2-proxy/oauth2-proxy/pull/668) Use req.Host in --force-https when req.URL.Host is empty (@zucaritask)
+- [#660](https://github.com/oauth2-proxy/oauth2-proxy/pull/660) Use builder pattern to simplify requests to external endpoints (@JoelSpeed)
+- [#591](https://github.com/oauth2-proxy/oauth2-proxy/pull/591) Introduce upstream package with new reverse proxy implementation (@JoelSpeed)
+- [#576](https://github.com/oauth2-proxy/oauth2-proxy/pull/576) Separate Cookie validation out of main options validation (@JoelSpeed)
+- [#656](https://github.com/oauth2-proxy/oauth2-proxy/pull/656) Split long session cookies more precisely (@NickMeves)
+- [#619](https://github.com/oauth2-proxy/oauth2-proxy/pull/619) Improve Redirect to HTTPs behaviour (@JoelSpeed)
+- [#654](https://github.com/oauth2-proxy/oauth2-proxy/pull/654) Close client connections after each redis test (@JoelSpeed)
+- [#542](https://github.com/oauth2-proxy/oauth2-proxy/pull/542) Move SessionStore tests to independent package (@JoelSpeed)
+- [#577](https://github.com/oauth2-proxy/oauth2-proxy/pull/577) Move Cipher and Session Store initialisation out of Validation (@JoelSpeed)
+- [#635](https://github.com/oauth2-proxy/oauth2-proxy/pull/635) Support specifying alternative provider TLS trust source(s) (@k-wall)
+- [#649](https://github.com/oauth2-proxy/oauth2-proxy/pull/650) Resolve an issue where an empty healthcheck URL and ping-user-agent returns the healthcheck response (@jordancrawfordnz)
+- [#662](https://github.com/oauth2-proxy/oauth2-proxy/pull/662) Do not add Cache-Control header to response from auth only endpoint (@johejo)
+- [#552](https://github.com/oauth2-proxy/oauth2-proxy/pull/522) Implements --trusted-ip option to allow clients behind specified IPs or CIDR ranges to bypass authentication (@Izzette)
+
+# v6.0.0
+
+## Release Highlights
+
+- Migrated to an independent GitHub organisation
+- Added local test environment examples using docker-compose and kind
+- Error pages will now be rendered when upstream connections fail
+- Non-Existent options in config files will now return errors on startup
+- Sessions are now always encrypted, independent of configuration
+
+## Important Notes
+
+- (Security) Fix for [open redirect vulnerability](https://github.com/oauth2-proxy/oauth2-proxy/security/advisories/GHSA-5m6c-jp6f-2vcv).
+  - More invalid redirects that lead to open-redirects were reported
+  - An extensive test suite has been added to prevent future regressions
 - [#453](https://github.com/oauth2-proxy/oauth2-proxy/pull/453) Responses to endpoints with a proxy prefix will now return headers for preventing browser caching.
 
 ## Breaking Changes
@@ -25,12 +73,68 @@
 - [#535](https://github.com/oauth2-proxy/oauth2-proxy/pull/535) Drop support for pre v3.1 cookies
   - The encoding for session cookies was changed starting in v3.1.0, support for the previous encoding is now dropped
   - If you are upgrading from a version earlier than this, please upgrade via a version between v3.1.0 and v5.1.1
+- [#537](https://github.com/oauth2-proxy/oauth2-proxy/pull/537) Drop Fallback to Email if User not set
+  - Previously, when a session was loaded, if the User was not set, it would be replaced by the Email.
+    This behaviour was inconsistent as it required the session to be stored and then loaded to function properly.
+  - This behaviour has now been removed and the User field will remain empty if it was not set when the session was saved.
+  - In some scenarios `X-Forwarded-User` will now be empty. Use `X-Forwarded-Email` instead.
+  - In some scenarios, this may break setting Basic Auth on upstream or responses.
+    Use `--prefer-email-to-user` to restore falling back to the Email in these cases.
+- [#556](https://github.com/oauth2-proxy/oauth2-proxy/pull/556) Remove unintentional auto-padding of secrets that were too short
+  - Previously, after cookie-secrets were opportunistically base64 decoded to raw bytes,
+    they were padded to have a length divisible by 4.
+  - This led to wrong sized secrets being valid AES lengths of 16, 24, or 32  bytes. Or it led to confusing errors
+    reporting an invalid length of 20 or 28 when the user input cookie-secret was not that length.
+  - Now we will only base64 decode a cookie-secret to raw bytes if it is 16, 24, or 32 bytes long. Otherwise, we will convert
+    the direct cookie-secret to bytes without silent padding added.
+- [#412](https://github.com/oauth2-proxy/oauth2-proxy/pull/412)/[#559](https://github.com/oauth2-proxy/oauth2-proxy/pull/559) Allow multiple cookie domains to be specified
+  - Multiple cookie domains may now be configured. The longest domain that matches will be used.
+  - The config options `cookie_domain` is now `cookie_domains`
+  - The environment variable `OAUTH2_PROXY_COOKIE_DOMAIN` is now `OAUTH2_PROXY_COOKIE_DOMAINS`
+- [#414](https://github.com/oauth2-proxy/oauth2-proxy/pull/414) Always encrypt sessions regardless of config
+  - Previously, sessions were encrypted only when certain options were configured.
+    This lead to confusion and misconfiguration as it was not obvious when a session should be encrypted.
+  - Cookie Secrets must now be 16, 24 or 32 bytes.
+  - If you need to change your secret, this will force users to reauthenticate.
+- [#548](https://github.com/oauth2-proxy/oauth2-proxy/pull/548) Separate logging options out of main options structure
+  - Fixes an inconsistency in the `--exclude-logging-paths` option by renaming it to `--exclude-logging-option`.
+  - This flag may now be given multiple times as with other list options
+  - This flag also accepts comma separated values
+- [#639](https://github.com/oauth2-proxy/oauth2-proxy/pull/639) Change how gitlab-group is parsed on options
+  - Previously, the flag gitlab-group used comma seperated values, while the config option used space seperated values.
+  - This fixes the config value to use slices internally.
+  - The config option `gitlab_group` is now `gitlab_groups`
+  - The environment variable `OAUTH2_PROXY_GITLAB_GROUP` is now `OAUTH2_PROXY_GITLAB_GROUPS`
 
 ## Changes since v5.1.1
 
+- [GHSA-5m6c-jp6f-2vcv](https://github.com/oauth2-proxy/oauth2-proxy/security/advisories/GHSA-5m6c-jp6f-2vcv) New OpenRedirect cases have been found (@JoelSpeed)
+- [#639](https://github.com/oauth2-proxy/oauth2-proxy/pull/639) Change how gitlab-group is parsed on options (@linuxgemini)
+- [#615](https://github.com/oauth2-proxy/oauth2-proxy/pull/615) Kubernetes example based on Kind cluster and Nginx ingress (@EvgeniGordeev)
+- [#596](https://github.com/oauth2-proxy/oauth2-proxy/pull/596) Validate Bearer IDTokens in headers with correct provider/extra JWT Verifier (@NickMeves)
+- [#620](https://github.com/oauth2-proxy/oauth2-proxy/pull/620) Add HealthCheck middleware (@JoelSpeed)
+- [#597](https://github.com/oauth2-proxy/oauth2-proxy/pull/597) Don't log invalid redirect if redirect is empty (@JoelSpeed)
+- [#604](https://github.com/oauth2-proxy/oauth2-proxy/pull/604) Add Keycloak local testing environment (@EvgeniGordeev)
+- [#539](https://github.com/oauth2-proxy/oauth2-proxy/pull/539) Refactor encryption ciphers and add AES-GCM support (@NickMeves)
+- [#601](https://github.com/oauth2-proxy/oauth2-proxy/pull/601) Ensure decrypted user/email are valid UTF8 (@JoelSpeed)
+- [#560](https://github.com/oauth2-proxy/oauth2-proxy/pull/560) Fallback to UserInfo is User ID claim not present (@JoelSpeed)
+- [#598](https://github.com/oauth2-proxy/oauth2-proxy/pull/598) acr_values no longer sent to IdP when empty (@ScottGuymer)
+- [#548](https://github.com/oauth2-proxy/oauth2-proxy/pull/548) Separate logging options out of main options structure (@JoelSpeed)
+- [#567](https://github.com/oauth2-proxy/oauth2-proxy/pull/567) Allow health/ping request to be identified via User-Agent (@chkohner)
+- [#536](https://github.com/oauth2-proxy/oauth2-proxy/pull/536) Improvements to Session State code (@JoelSpeed)
+- [#573](https://github.com/oauth2-proxy/oauth2-proxy/pull/573) Properly parse redis urls for cluster and sentinel connections (@amnay-mo)
+- [#574](https://github.com/oauth2-proxy/oauth2-proxy/pull/574) render error page on 502 proxy status (@amnay-mo)
+- [#559](https://github.com/oauth2-proxy/oauth2-proxy/pull/559) Rename cookie-domain config to cookie-domains (@JoelSpeed)
+- [#569](https://github.com/oauth2-proxy/oauth2-proxy/pull/569) Updated autocompletion for `--` long options. (@Izzette)
+- [#489](https://github.com/oauth2-proxy/oauth2-proxy/pull/489) Move Options and Validation to separate packages (@JoelSpeed)
+- [#556](https://github.com/oauth2-proxy/oauth2-proxy/pull/556) Remove unintentional auto-padding of secrets that were too short (@NickMeves)
+- [#538](https://github.com/oauth2-proxy/oauth2-proxy/pull/538) Refactor sessions/utils.go functionality to other areas (@NickMeves)
+- [#503](https://github.com/oauth2-proxy/oauth2-proxy/pull/503) Implements --real-client-ip-header option to select the header from which to obtain a proxied client's IP (@Izzette)
+- [#529](https://github.com/oauth2-proxy/oauth2-proxy/pull/529) Add local test environments for testing changes and new features (@JoelSpeed)
+- [#537](https://github.com/oauth2-proxy/oauth2-proxy/pull/537) Drop Fallback to Email if User not set (@JoelSpeed)
 - [#535](https://github.com/oauth2-proxy/oauth2-proxy/pull/535) Drop support for pre v3.1 cookies (@JoelSpeed)
 - [#533](https://github.com/oauth2-proxy/oauth2-proxy/pull/487) Set up code coverage within Travis for Code Climate (@JoelSpeed)
-- [#514](https://github.com/oauth2-proxy/oauth2-proxy/pull/514) Add basic string functions to templates
+- [#514](https://github.com/oauth2-proxy/oauth2-proxy/pull/514) Add basic string functions to templates (@n-i-x)
 - [#524](https://github.com/oauth2-proxy/oauth2-proxy/pull/524) Sign cookies with SHA256 (@NickMeves)
 - [#515](https://github.com/oauth2-proxy/oauth2-proxy/pull/515) Drop configure script in favour of native Makefile env and checks (@JoelSpeed)
 - [#519](https://github.com/oauth2-proxy/oauth2-proxy/pull/519) Support context in providers (@johejo)
@@ -59,6 +163,8 @@
 - [#488](https://github.com/oauth2-proxy/oauth2-proxy/pull/488) Set-Basic-Auth should default to false (@JoelSpeed)
 - [#494](https://github.com/oauth2-proxy/oauth2-proxy/pull/494) Upstream websockets TLS certificate validation now depends on ssl-upstream-insecure-skip-verify (@yaroslavros)
 - [#497](https://github.com/oauth2-proxy/oauth2-proxy/pull/497) Restrict access using Github collaborators (@jsclayton)
+- [#414](https://github.com/oauth2-proxy/oauth2-proxy/pull/414) Always encrypt sessions regardless of config (@ti-mo)
+- [#421](https://github.com/oauth2-proxy/oauth2-proxy/pull/421) Allow logins by usernames even if they do not belong to the specified org and team or collaborators (@yyoshiki41)
 
 # v5.1.1
 

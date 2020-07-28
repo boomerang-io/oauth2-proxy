@@ -1,36 +1,35 @@
 package sessions
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"time"
+	"unicode/utf8"
 
 	"github.com/oauth2-proxy/oauth2-proxy/pkg/encryption"
+	"github.com/pierrec/lz4"
+	"github.com/vmihailenco/msgpack/v4"
 )
 
 // SessionState is used to store information about the currently authenticated user session
 type SessionState struct {
-	AccessToken       string    `json:",omitempty"`
-	IDToken           string    `json:",omitempty"`
-	CreatedAt         time.Time `json:"-"`
-	ExpiresOn         time.Time `json:"-"`
-	RefreshToken      string    `json:",omitempty"`
-	Email             string    `json:",omitempty"`
-	User              string    `json:",omitempty"`
-	PreferredUsername string    `json:",omitempty"`
-}
-
-// SessionStateJSON is used to encode SessionState into JSON without exposing time.Time zero value
-type SessionStateJSON struct {
-	*SessionState
-	CreatedAt *time.Time `json:",omitempty"`
-	ExpiresOn *time.Time `json:",omitempty"`
+	AccessToken       string     `json:",omitempty" msgpack:"at,omitempty"`
+	IDToken           string     `json:",omitempty" msgpack:"it,omitempty"`
+	CreatedAt         *time.Time `json:",omitempty" msgpack:"ca,omitempty"`
+	ExpiresOn         *time.Time `json:",omitempty" msgpack:"eo,omitempty"`
+	RefreshToken      string     `json:",omitempty" msgpack:"rt,omitempty"`
+	Email             string     `json:",omitempty" msgpack:"e,omitempty"`
+	User              string     `json:",omitempty" msgpack:"u,omitempty"`
+	PreferredUsername string     `json:",omitempty" msgpack:"pu,omitempty"`
 }
 
 // IsExpired checks whether the session has expired
 func (s *SessionState) IsExpired() bool {
-	if !s.ExpiresOn.IsZero() && s.ExpiresOn.Before(time.Now()) {
+	if s.ExpiresOn != nil && !s.ExpiresOn.IsZero() && s.ExpiresOn.Before(time.Now()) {
 		return true
 	}
 	return false
@@ -38,8 +37,8 @@ func (s *SessionState) IsExpired() bool {
 
 // Age returns the age of a session
 func (s *SessionState) Age() time.Duration {
-	if !s.CreatedAt.IsZero() {
-		return time.Now().Truncate(time.Second).Sub(s.CreatedAt)
+	if s.CreatedAt != nil && !s.CreatedAt.IsZero() {
+		return time.Now().Truncate(time.Second).Sub(*s.CreatedAt)
 	}
 	return 0
 }
@@ -65,136 +64,178 @@ func (s *SessionState) String() string {
 	return o + "}"
 }
 
-// EncodeSessionState returns string representation of the current session
-func (s *SessionState) EncodeSessionState(c *encryption.Cipher) (string, error) {
-	var ss SessionState
-	if c == nil {
-		// Store only Email and User when cipher is unavailable
-		ss.Email = s.Email
-		ss.User = s.User
-		ss.PreferredUsername = s.PreferredUsername
-	} else {
-		ss = *s
-		var err error
-		if ss.Email != "" {
-			ss.Email, err = c.Encrypt(ss.Email)
-			if err != nil {
-				return "", err
-			}
-		}
-		if ss.User != "" {
-			ss.User, err = c.Encrypt(ss.User)
-			if err != nil {
-				return "", err
-			}
-		}
-		if ss.PreferredUsername != "" {
-			ss.PreferredUsername, err = c.Encrypt(ss.PreferredUsername)
-			if err != nil {
-				return "", err
-			}
-		}
-		if ss.AccessToken != "" {
-			ss.AccessToken, err = c.Encrypt(ss.AccessToken)
-			if err != nil {
-				return "", err
-			}
-		}
-		if ss.IDToken != "" {
-			ss.IDToken, err = c.Encrypt(ss.IDToken)
-			if err != nil {
-				return "", err
-			}
-		}
-		if ss.RefreshToken != "" {
-			ss.RefreshToken, err = c.Encrypt(ss.RefreshToken)
-			if err != nil {
-				return "", err
-			}
-		}
+// EncodeSessionState returns an encrypted, lz4 compressed, MessagePack encoded session
+func (s *SessionState) EncodeSessionState(c encryption.Cipher, compress bool) ([]byte, error) {
+	packed, err := msgpack.Marshal(s)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling session state to msgpack: %w", err)
 	}
-	// Embed SessionState and ExpiresOn pointer into SessionStateJSON
-	ssj := &SessionStateJSON{SessionState: &ss}
-	if !ss.CreatedAt.IsZero() {
-		ssj.CreatedAt = &ss.CreatedAt
+
+	if !compress {
+		return c.Encrypt(packed)
 	}
-	if !ss.ExpiresOn.IsZero() {
-		ssj.ExpiresOn = &ss.ExpiresOn
+
+	compressed, err := lz4Compress(packed)
+	if err != nil {
+		return nil, err
 	}
-	b, err := json.Marshal(ssj)
-	return string(b), err
+	return c.Encrypt(compressed)
 }
 
-// DecodeSessionState decodes the session cookie string into a SessionState
-func DecodeSessionState(v string, c *encryption.Cipher) (*SessionState, error) {
-	var ssj SessionStateJSON
-	var ss *SessionState
-	err := json.Unmarshal([]byte(v), &ssj)
+// DecodeSessionState decodes a LZ4 compressed MessagePack into a Session State
+func DecodeSessionState(data []byte, c encryption.Cipher, compressed bool) (*SessionState, error) {
+	decrypted, err := c.Decrypt(data)
+	if err != nil {
+		return nil, fmt.Errorf("error decrypting the session state: %w", err)
+	}
+
+	packed := decrypted
+	if compressed {
+		packed, err = lz4Decompress(decrypted)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var ss SessionState
+	err = msgpack.Unmarshal(packed, &ss)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling data to session state: %w", err)
+	}
+
+	err = ss.validate()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ss, nil
+}
+
+// LegacyV5DecodeSessionState decodes a legacy JSON session cookie string into a SessionState
+func LegacyV5DecodeSessionState(v string, c encryption.Cipher) (*SessionState, error) {
+	var ss SessionState
+	err := json.Unmarshal([]byte(v), &ss)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshalling session: %w", err)
 	}
-	if ssj.SessionState == nil {
-		return nil, errors.New("expected session state to not be nil")
+
+	for _, s := range []*string{
+		&ss.User,
+		&ss.Email,
+		&ss.PreferredUsername,
+		&ss.AccessToken,
+		&ss.IDToken,
+		&ss.RefreshToken,
+	} {
+		err := into(s, c.Decrypt)
+		if err != nil {
+			return nil, err
+		}
+	}
+	err = ss.validate()
+	if err != nil {
+		return nil, err
 	}
 
-	// Extract SessionState and CreatedAt,ExpiresOn value from SessionStateJSON
-	ss = ssj.SessionState
-	if ssj.CreatedAt != nil {
-		ss.CreatedAt = *ssj.CreatedAt
-	}
-	if ssj.ExpiresOn != nil {
-		ss.ExpiresOn = *ssj.ExpiresOn
+	return &ss, nil
+}
+
+// codecFunc is a function that takes a []byte and encodes/decodes it
+type codecFunc func([]byte) ([]byte, error)
+
+func into(s *string, f codecFunc) error {
+	// Do not encrypt/decrypt nil or empty strings
+	if s == nil || *s == "" {
+		return nil
 	}
 
-	if c == nil {
-		// Load only Email and User when cipher is unavailable
-		ss = &SessionState{
-			Email:             ss.Email,
-			User:              ss.User,
-			PreferredUsername: ss.PreferredUsername,
-		}
-	} else {
-		// Backward compatibility with using unencrypted Email
-		if ss.Email != "" {
-			decryptedEmail, errEmail := c.Decrypt(ss.Email)
-			if errEmail == nil {
-				ss.Email = decryptedEmail
-			}
-		}
-		// Backward compatibility with using unencrypted User
-		if ss.User != "" {
-			decryptedUser, errUser := c.Decrypt(ss.User)
-			if errUser == nil {
-				ss.User = decryptedUser
-			}
-		}
-		if ss.PreferredUsername != "" {
-			ss.PreferredUsername, err = c.Decrypt(ss.PreferredUsername)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if ss.AccessToken != "" {
-			ss.AccessToken, err = c.Decrypt(ss.AccessToken)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if ss.IDToken != "" {
-			ss.IDToken, err = c.Decrypt(ss.IDToken)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if ss.RefreshToken != "" {
-			ss.RefreshToken, err = c.Decrypt(ss.RefreshToken)
-			if err != nil {
-				return nil, err
-			}
+	d, err := f([]byte(*s))
+	if err != nil {
+		return err
+	}
+	*s = string(d)
+	return nil
+}
+
+// lz4Compress compresses with LZ4
+//
+// The Compress:Decompress ratio is 1:Many. LZ4 gives fastest decompress speeds
+// at the expense of greater compression compared to other compression
+// algorithms.
+func lz4Compress(payload []byte) ([]byte, error) {
+	buf := new(bytes.Buffer)
+	zw := lz4.NewWriter(nil)
+	zw.Header = lz4.Header{
+		BlockMaxSize:     65536,
+		CompressionLevel: 0,
+	}
+	zw.Reset(buf)
+
+	reader := bytes.NewReader(payload)
+	_, err := io.Copy(zw, reader)
+	if err != nil {
+		return nil, fmt.Errorf("error copying lz4 stream to buffer: %w", err)
+	}
+	err = zw.Close()
+	if err != nil {
+		return nil, fmt.Errorf("error closing lz4 writer: %w", err)
+	}
+
+	compressed, err := ioutil.ReadAll(buf)
+	if err != nil {
+		return nil, fmt.Errorf("error reading lz4 buffer: %w", err)
+	}
+
+	return compressed, nil
+}
+
+// lz4Decompress decompresses with LZ4
+func lz4Decompress(compressed []byte) ([]byte, error) {
+	reader := bytes.NewReader(compressed)
+	buf := new(bytes.Buffer)
+	zr := lz4.NewReader(nil)
+	zr.Reset(reader)
+	_, err := io.Copy(buf, zr)
+	if err != nil {
+		return nil, fmt.Errorf("error copying lz4 stream to buffer: %w", err)
+	}
+
+	payload, err := ioutil.ReadAll(buf)
+	if err != nil {
+		return nil, fmt.Errorf("error reading lz4 buffer: %w", err)
+	}
+
+	return payload, nil
+}
+
+// validate ensures the decoded session is non-empty and contains valid data
+//
+// Non-empty check is needed due to ensure the non-authenticated AES-CFB
+// decryption doesn't result in garbage data that collides with a valid
+// MessagePack header bytes (which MessagePack will unmarshal to an empty
+// default SessionState). <1% chance, but observed with random test data.
+//
+// UTF-8 check ensures the strings are valid and not raw bytes overloaded
+// into Latin-1 encoding. The occurs when legacy unencrypted fields are
+// decrypted with AES-CFB which results in random bytes.
+func (s *SessionState) validate() error {
+	for _, field := range []string{
+		s.User,
+		s.Email,
+		s.PreferredUsername,
+		s.AccessToken,
+		s.IDToken,
+		s.RefreshToken,
+	} {
+		if !utf8.ValidString(field) {
+			return errors.New("invalid non-UTF8 field in session")
 		}
 	}
-	if ss.User == "" {
-		ss.User = ss.Email
+
+	empty := new(SessionState)
+	if *s == *empty {
+		return errors.New("invalid empty session unmarshalled")
 	}
-	return ss, nil
+
+	return nil
 }
