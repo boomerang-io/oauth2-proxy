@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -22,13 +21,16 @@ type OIDCIBMW3idProvider struct {
 
 	Verifier             *oidc.IDTokenVerifier
 	AllowUnverifiedEmail bool
+	UserIDClaim          string
 }
 
-// NewOIDCIBMW3idProvider initiates a new OIDCProvider
+// NewOIDCIBMW3idProvider initiates a new OIDCIBMW3idProvider
 func NewOIDCIBMW3idProvider(p *ProviderData) *OIDCIBMW3idProvider {
 	p.ProviderName = "IBM w3id's OpenID Connect"
 	return &OIDCIBMW3idProvider{ProviderData: p}
 }
+
+var _ Provider = (*OIDCIBMW3idProvider)(nil)
 
 // Redeem exchanges the OAuth2 authentication token for an ID token
 func (p *OIDCIBMW3idProvider) Redeem(ctx context.Context, redirectURL, code string) (s *sessions.SessionState, err error) {
@@ -45,21 +47,20 @@ func (p *OIDCIBMW3idProvider) Redeem(ctx context.Context, redirectURL, code stri
 		},
 		RedirectURL: redirectURL,
 	}
-	// 20180629 - TL: Added logging
-	//fmt.Printf("Client ID: %s\n", p.ClientID)
-	//fmt.Printf("Client Secret: %s\n", p.ClientSecret)
-	//fmt.Printf("Token URL: %s\n", p.RedeemURL.String())
-	//fmt.Printf("Redirect URL: %s\n", redirectURL)
-	//fmt.Printf("Code: %s\n", code)
 
-	// 20180629 - TL: Add in a parameter to handle registering broken oauth2's
-	oauth2.RegisterBrokenAuthHeaderProvider(p.RedeemURL.String())
+	// Added logging
+	//logger.Printf("Client ID: %s", p.ClientID)
+	//logger.Printf("Client Secret: %s", p.ClientSecret)
+	//logger.Printf("Token URL: %s", p.RedeemURL.String())
+	//logger.Printf("Redirect URL: %s", redirectURL)
+	//logger.Printf("Code: %s", code)
 
 	token, err := c.Exchange(ctx, code)
 	if err != nil {
 		return nil, fmt.Errorf("token exchange: %v", err)
 	}
-	fmt.Printf("Token: %v\n", token)
+
+	//logger.Printf("Token: %v\n", token)
 
 	// in the initial exchange the id token is mandatory
 	idToken, err := p.findVerifiedIDToken(ctx, token)
@@ -80,11 +81,10 @@ func (p *OIDCIBMW3idProvider) Redeem(ctx context.Context, redirectURL, code stri
 // RefreshSessionIfNeeded checks if the session has expired and uses the
 // RefreshToken to fetch a new Access Token (and optional ID token) if required
 func (p *OIDCIBMW3idProvider) RefreshSessionIfNeeded(ctx context.Context, s *sessions.SessionState) (bool, error) {
-	fmt.Printf("RefreshSessionIfNeeded() - %v\n", s)
-	if s == nil || s.ExpiresOn.After(time.Now()) || s.RefreshToken == "" {
+	//logger.Printf("RefreshSessionIfNeeded() - %v\n", s)
+	if s == nil || (s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())) || s.RefreshToken == "" {
 		return false, nil
 	}
-	origExpiration := s.ExpiresOn
 
 	err := p.redeemRefreshToken(ctx, s)
 	if err != nil {
@@ -92,7 +92,7 @@ func (p *OIDCIBMW3idProvider) RefreshSessionIfNeeded(ctx context.Context, s *ses
 		return false, fmt.Errorf("unable to redeem refresh token: %v", err)
 	}
 
-	fmt.Printf("refreshed id token %s (expired on %s)\n", s, origExpiration)
+	fmt.Printf("refreshed access token %s (expired on %s)\n", s, s.ExpiresOn)
 	return true, nil
 }
 
@@ -114,7 +114,7 @@ func (p *OIDCIBMW3idProvider) redeemRefreshToken(ctx context.Context, s *session
 		Expiry:       time.Now().Add(-time.Hour),
 	}
 	token, err := c.TokenSource(ctx, t).Token()
-	fmt.Printf("redeemRefreshToken() - token: %v\n", token)
+	//fmt.Printf("redeemRefreshToken() - token: %v\n", token)
 	if err != nil {
 		return fmt.Errorf("failed to get token: %v", err)
 	}
@@ -155,6 +155,9 @@ func (p *OIDCIBMW3idProvider) findVerifiedIDToken(ctx context.Context, token *oa
 	}
 
 	if rawIDToken, present := getIDToken(); present {
+		//logger.Printf("findVerifiedIDToken() - %v ", rawIDToken)
+		//logger.Printf("findVerifiedIDToken() isPresent - %v ", present)
+		//logger.Printf("findVerifiedIDToken() Verifier - %v ", p.Verifier)
 		verifiedIDToken, err := p.Verifier.Verify(ctx, rawIDToken)
 		return verifiedIDToken, err
 	}
@@ -163,88 +166,134 @@ func (p *OIDCIBMW3idProvider) findVerifiedIDToken(ctx context.Context, token *oa
 
 func (p *OIDCIBMW3idProvider) createSessionState(ctx context.Context, token *oauth2.Token, idToken *oidc.IDToken) (*sessions.SessionState, error) {
 
-	newSession := &sessions.SessionState{}
+	var newSession *sessions.SessionState
 
-	fmt.Printf("createSessionState() - rawIDToken: %v\n", idToken)
-	if idToken != nil {
-		claims, err := findClaimsFromIDTokenIBMw3(idToken, token.AccessToken, p.ProfileURL.String())
+	//logger.Printf("createSessionState() - rawIDToken: %v\n", idToken)
+	if idToken == nil {
+		newSession = &sessions.SessionState{}
+	} else {
+		var err error
+		newSession, err = p.createSessionStateInternal(ctx, token.Extra("id_token").(string), idToken, token)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't extract claims from id_token (%e)", err)
+			return nil, err
 		}
-
-		if claims != nil {
-
-			if !p.AllowUnverifiedEmail && claims.Verified != nil && !*claims.Verified {
-				return nil, fmt.Errorf("email in id_token (%s) isn't verified", claims.Email)
-			}
-
-			newSession.Email = claims.Email
-			newSession.User = claims.Subject
-			newSession.PreferredUsername = claims.PreferredUsername
-
-			// 20180629 - TL: Remove unnecessary bloat due to BlueGroups
-			bmrgIDToken, err := removeW3idBlueGroupsInIDToken(token.Extra("id_token").(string))
-			if err != nil {
-				fmt.Errorf("Unable to Remove W3id Blue Groups in ID Token: %v", err)
-				bmrgIDToken = token.Extra("id_token").(string)
-			}
-			fmt.Printf("Boomerang IDToken: %s\n", bmrgIDToken)
-			newSession.IDToken = bmrgIDToken
-		}
-
 	}
 
+	created := time.Now()
 	newSession.AccessToken = token.AccessToken
 	newSession.RefreshToken = token.RefreshToken
-	newSession.CreatedAt = time.Now()
-	newSession.ExpiresOn = token.Expiry
+	newSession.CreatedAt = &created
+	newSession.ExpiresOn = &token.Expiry
+	return newSession, nil
+}
+
+func (p *OIDCIBMW3idProvider) CreateSessionStateFromBearerToken(ctx context.Context, rawIDToken string, idToken *oidc.IDToken) (*sessions.SessionState, error) {
+
+	//logger.Printf("ID Token: %v\n", idToken)
+	//logger.Printf("rawIDToken: %v\n", rawIDToken)
+
+	newSession, err := p.createSessionStateInternal(ctx, rawIDToken, idToken, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	newSession.AccessToken = rawIDToken
+	newSession.IDToken = rawIDToken
+	newSession.RefreshToken = ""
+	newSession.ExpiresOn = &idToken.Expiry
+
+	return newSession, nil
+}
+
+func (p *OIDCIBMW3idProvider) createSessionStateInternal(ctx context.Context, rawIDToken string, idToken *oidc.IDToken, token *oauth2.Token) (*sessions.SessionState, error) {
+
+	//logger.Printf("createSessionStateInternal - ID Token: %v\n", idToken)
+	//logger.Printf("createSessionStateInternal - rawIDToken: %v\n", rawIDToken)
+
+	newSession := &sessions.SessionState{}
+
+	if idToken == nil {
+		return newSession, nil
+	}
+	accessToken := ""
+	if token != nil {
+		accessToken = token.AccessToken
+	}
+
+	claims, err := p.findClaimsFromIDToken(ctx, idToken, accessToken, p.ProfileURL.String())
+	if err != nil {
+		return nil, fmt.Errorf("couldn't extract claims from id_token (%v)", err)
+	}
+
+	newSession.Email = claims.UserID // TODO Rename SessionState.Email to .UserID in the near future
+
+	newSession.User = claims.Subject
+	newSession.PreferredUsername = claims.PreferredUsername
+
+	//Remove unnecessary bloat due to BlueGroups
+	bmrgIDToken, err := removeW3idBlueGroupsInIDToken(token.Extra("id_token").(string))
+	if err != nil {
+		fmt.Errorf("Unable to Remove W3id Blue Groups in ID Token: %v", err)
+		bmrgIDToken = token.Extra("id_token").(string)
+	}
+	//logger.Printf("Boomerang IDToken: %s\n", bmrgIDToken)
+	newSession.IDToken = bmrgIDToken
+
+	verifyEmail := (p.UserIDClaim == "emailAddress") && !p.AllowUnverifiedEmail
+	if verifyEmail && claims.Verified != nil && !*claims.Verified {
+		return nil, fmt.Errorf("emailAddress in id_token (%s) isn't verified", claims.UserID)
+	}
+
 	return newSession, nil
 }
 
 // ValidateSessionState checks that the session's IDToken is still valid
 func (p *OIDCIBMW3idProvider) ValidateSessionState(ctx context.Context, s *sessions.SessionState) bool {
 	_, err := p.Verifier.Verify(ctx, s.IDToken)
-	if err != nil {
-		return false
-	}
-
-	return true
+	return err == nil
 }
 
-func findClaimsFromIDTokenIBMw3(idToken *oidc.IDToken, accessToken string, profileURL string) (*IBMClaims, error) {
+func (p *OIDCIBMW3idProvider) findClaimsFromIDToken(ctx context.Context, idToken *oidc.IDToken, accessToken string, profileURL string) (*OIDCClaims, error) {
 
+	claims := &OIDCClaims{}
+	// Extract default claims.
+	if err := idToken.Claims(&claims); err != nil {
+		return nil, fmt.Errorf("failed to parse default id_token claims: %v", err)
+	}
 	// Extract custom claims.
-	claims := &IBMClaims{}
-	if err := idToken.Claims(claims); err != nil {
-		return nil, fmt.Errorf("failed to parse id_token claims: %v", err)
+	if err := idToken.Claims(&claims.rawClaims); err != nil {
+		return nil, fmt.Errorf("failed to parse all id_token claims: %v", err)
 	}
 
-	if claims.Email == "" {
+	userID := claims.rawClaims[p.UserIDClaim]
+	if userID != nil {
+		claims.UserID = fmt.Sprint(userID)
+	}
+
+	// userID claim was not present or was empty in the ID Token
+	if claims.UserID == "" {
 		if profileURL == "" {
-			return nil, fmt.Errorf("id_token did not contain an email")
+			return nil, fmt.Errorf("id_token did not contain user ID claim (%q)", p.UserIDClaim)
 		}
 
 		// If the userinfo endpoint profileURL is defined, then there is a chance the userinfo
 		// contents at the profileURL contains the email.
 		// Make a query to the userinfo endpoint, and attempt to locate the email from there.
-
-		req, err := http.NewRequest("GET", profileURL, nil)
+		respJSON, err := requests.New(profileURL).
+			WithContext(ctx).
+			WithHeaders(getOIDCHeader(accessToken)).
+			Do().
+			UnmarshalJSON()
 		if err != nil {
 			return nil, err
 		}
-		req.Header = getOIDCHeader(accessToken)
 
-		respJSON, err := requests.Request(req)
+		userID, err := respJSON.Get(p.UserIDClaim).String()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("neither id_token nor userinfo endpoint contained user ID claim (%q)", p.UserIDClaim)
 		}
 
-		email, err := respJSON.Get("email").String()
-		if err != nil {
-			return nil, fmt.Errorf("neither id_token nor userinfo endpoint contained an email")
-		}
-
-		claims.Email = email
+		claims.UserID = userID
 	}
 
 	return claims, nil
@@ -272,12 +321,4 @@ func removeW3idBlueGroupsInIDToken(p string) (string, error) {
 	parts[1] = base64.RawURLEncoding.EncodeToString(bytePayload2)
 
 	return strings.Join(parts, "."), nil
-}
-
-// IBMClaims with IBM w3id structure
-type IBMClaims struct {
-	Subject           string `json:"sub"`
-	Email             string `json:"emailAddress"`
-	Verified          *bool  `json:"email_verified"`
-	PreferredUsername string `json:"preferred_username"`
 }

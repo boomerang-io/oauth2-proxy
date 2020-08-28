@@ -332,6 +332,23 @@ func parseProviderInfo(o *options.Options, msgs []string) []string {
 				p.JWTKey = signKey
 			}
 		}
+
+	case *providers.OIDCIBMidProvider:
+		p.AllowUnverifiedEmail = o.InsecureOIDCAllowUnverifiedEmail
+		p.UserIDClaim = o.UserIDClaim
+		if o.GetOIDCVerifier() == nil {
+			msgs = append(msgs, "oidc ibmid provider requires an oidc issuer URL")
+		} else {
+			p.Verifier = o.GetOIDCVerifier()
+		}
+	case *providers.OIDCIBMW3idProvider:
+		p.AllowUnverifiedEmail = o.InsecureOIDCAllowUnverifiedEmail
+		p.UserIDClaim = o.UserIDClaim
+		if o.GetOIDCVerifier() == nil {
+			msgs = append(msgs, "oidc ibm w3id provider requires an oidc issuer URL")
+		} else {
+			p.Verifier = o.GetOIDCVerifier()
+		}
 	}
 	return msgs
 }

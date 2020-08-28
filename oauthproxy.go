@@ -408,7 +408,7 @@ func (p *OAuthProxy) SignInPage(rw http.ResponseWriter, req *http.Request, code 
 
 	t := struct {
 		ProviderName  string
-		SignInMessage string
+		SignInMessage template.HTML
 		CustomLogin   bool
 		Redirect      string
 		Version       string
