@@ -30,6 +30,8 @@ func Validate(o *options.Options) error {
 	msgs = append(msgs, validateSessionCookieMinimal(o)...)
 
 	if o.SSLInsecureSkipVerify {
+		// InsecureSkipVerify is a configurable option we allow
+		/* #nosec G402 */
 		insecureTransport := &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		}
@@ -90,7 +92,7 @@ func Validate(o *options.Options) error {
 				Do().
 				UnmarshalJSON()
 			if err != nil {
-				logger.Printf("error: failed to discover OIDC configuration: %v", err)
+				logger.Errorf("error: failed to discover OIDC configuration: %v", err)
 			} else {
 				// Prefer manually configured URLs. It's a bit unclear
 				// why you'd be doing discovery and also providing the URLs
@@ -217,7 +219,10 @@ func Validate(o *options.Options) error {
 	}
 
 	if len(o.TrustedIPs) > 0 && o.ReverseProxy {
-		fmt.Fprintln(os.Stderr, "WARNING: trusting of IPs with --reverse-proxy poses risks if a header spoofing attack is possible.")
+		_, err := fmt.Fprintln(os.Stderr, "WARNING: trusting of IPs with --reverse-proxy poses risks if a header spoofing attack is possible.")
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	for i, ipStr := range o.TrustedIPs {
