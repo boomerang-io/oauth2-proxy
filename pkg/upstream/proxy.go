@@ -74,7 +74,7 @@ func (m *multiUpstreamProxy) registerHTTPUpstreamProxy(upstream options.Upstream
 // NewProxyErrorHandler creates a ProxyErrorHandler using the template given.
 func NewProxyErrorHandler(errorTemplate *template.Template, proxyPrefix string) ProxyErrorHandler {
 	return func(rw http.ResponseWriter, req *http.Request, proxyErr error) {
-		logger.Printf("Error proxying to upstream server: %v", proxyErr)
+		logger.Errorf("Error proxying to upstream server: %v", proxyErr)
 		rw.WriteHeader(http.StatusBadGateway)
 		data := struct {
 			Title       string
@@ -85,6 +85,9 @@ func NewProxyErrorHandler(errorTemplate *template.Template, proxyPrefix string) 
 			Message:     "Error proxying to upstream server",
 			ProxyPrefix: proxyPrefix,
 		}
-		errorTemplate.Execute(rw, data)
+		err := errorTemplate.Execute(rw, data)
+		if err != nil {
+			http.Error(rw, "Internal Server Error", http.StatusInternalServerError)
+		}
 	}
 }

@@ -88,8 +88,10 @@ func buildSentinelClient(opts options.RedisStoreOptions) (Client, error) {
 		return nil, fmt.Errorf("could not parse redis urls: %v", err)
 	}
 	client := redis.NewFailoverClient(&redis.FailoverOptions{
-		MasterName:    opts.SentinelMasterName,
-		SentinelAddrs: addrs,
+		MasterName:       opts.SentinelMasterName,
+		SentinelAddrs:    addrs,
+		SentinelPassword: opts.SentinelPassword,
+		Password:         opts.Password,
 	})
 	return newClient(client), nil
 }
@@ -101,7 +103,8 @@ func buildClusterClient(opts options.RedisStoreOptions) (Client, error) {
 		return nil, fmt.Errorf("could not parse redis urls: %v", err)
 	}
 	client := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs: addrs,
+		Addrs:    addrs,
+		Password: opts.Password,
 	})
 	return newClusterClient(client), nil
 }
@@ -114,6 +117,10 @@ func buildStandaloneClient(opts options.RedisStoreOptions) (Client, error) {
 		return nil, fmt.Errorf("unable to parse redis url: %s", err)
 	}
 
+	if opts.Password != "" {
+		opt.Password = opts.Password
+	}
+
 	if opts.InsecureSkipTLSVerify {
 		opt.TLSConfig.InsecureSkipVerify = true
 	}
@@ -121,7 +128,7 @@ func buildStandaloneClient(opts options.RedisStoreOptions) (Client, error) {
 	if opts.CAPath != "" {
 		rootCAs, err := x509.SystemCertPool()
 		if err != nil {
-			logger.Printf("failed to load system cert pool for redis connection, falling back to empty cert pool")
+			logger.Errorf("failed to load system cert pool for redis connection, falling back to empty cert pool")
 		}
 		if rootCAs == nil {
 			rootCAs = x509.NewCertPool()
@@ -133,7 +140,7 @@ func buildStandaloneClient(opts options.RedisStoreOptions) (Client, error) {
 
 		// Append our cert to the system pool
 		if ok := rootCAs.AppendCertsFromPEM(certs); !ok {
-			logger.Printf("no certs appended, using system certs only")
+			logger.Errorf("no certs appended, using system certs only")
 		}
 
 		opt.TLSConfig.RootCAs = rootCAs

@@ -4,6 +4,22 @@
 
 ## Important Notes
 
+## Breaking Changes
+
+## Changes since v6.1.0
+
+# v6.1.0
+
+## Release Highlights
+
+- Redis session stores now support authenticated connections
+- Error logging can now be separated from info logging by directing error logs to stderr
+- Added --session-cookie-minimal flag which helps prevent large session cookies
+- Improvements to force-https behaviour
+- Allow requests to skip authentication based on their source IP
+
+## Important Notes
+
 - [#632](https://github.com/oauth2-proxy/oauth2-proxy/pull/632) There is backwards compatibility to sessions from v5
   - Any unencrypted sessions from before v5 that only contained a Username & Email will trigger a reauthentication
 
@@ -11,6 +27,15 @@
 
 ## Changes since v6.0.0
 
+- [#742](https://github.com/oauth2-proxy/oauth2-proxy/pull/742) Only log no cookie match if cookie domains specified (@JoelSpeed)
+- [#562](https://github.com/oauth2-proxy/oauth2-proxy/pull/562) Create generic Authorization Header constructor (@JoelSpeed)
+- [#715](https://github.com/oauth2-proxy/oauth2-proxy/pull/715) Ensure session times are not nil before printing them (@JoelSpeed)
+- [#714](https://github.com/oauth2-proxy/oauth2-proxy/pull/714) Support passwords with Redis session stores (@NickMeves)
+- [#719](https://github.com/oauth2-proxy/oauth2-proxy/pull/719) Add Gosec fixes to areas that are intermittently flagged on PRs (@NickMeves)
+- [#718](https://github.com/oauth2-proxy/oauth2-proxy/pull/718) Allow Logging to stdout with separate Error Log Channel
+- [#690](https://github.com/oauth2-proxy/oauth2-proxy/pull/690) Address GoSec security findings & remediate (@NickMeves)
+- [#689](https://github.com/oauth2-proxy/oauth2-proxy/pull/689) Fix finicky logging_handler_test from time drift (@NickMeves)
+- [#700](https://github.com/oauth2-proxy/oauth2-proxy/pull/700) Allow OIDC Bearer auth IDTokens to have empty email claim & profile URL (@NickMeves)
 - [#699](https://github.com/oauth2-proxy/oauth2-proxy/pull/699) Align persistence ginkgo tests with conventions (@NickMeves)
 - [#696](https://github.com/oauth2-proxy/oauth2-proxy/pull/696) Preserve query when building redirect
 - [#561](https://github.com/oauth2-proxy/oauth2-proxy/pull/561) Refactor provider URLs to package level vars (@JoelSpeed)
@@ -36,6 +61,7 @@
 - [#649](https://github.com/oauth2-proxy/oauth2-proxy/pull/650) Resolve an issue where an empty healthcheck URL and ping-user-agent returns the healthcheck response (@jordancrawfordnz)
 - [#662](https://github.com/oauth2-proxy/oauth2-proxy/pull/662) Do not add Cache-Control header to response from auth only endpoint (@johejo)
 - [#552](https://github.com/oauth2-proxy/oauth2-proxy/pull/522) Implements --trusted-ip option to allow clients behind specified IPs or CIDR ranges to bypass authentication (@Izzette)
+- [#733](https://github.com/oauth2-proxy/oauth2-proxy/pull/733) dist.sh: remove go version from asset links (@syscll)
 
 # v6.0.0
 

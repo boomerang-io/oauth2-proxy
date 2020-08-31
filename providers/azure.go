@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"time"
@@ -154,10 +153,8 @@ func (p *AzureProvider) Redeem(ctx context.Context, redirectURL, code string) (s
 	return
 }
 
-func getAzureHeader(accessToken string) http.Header {
-	header := make(http.Header)
-	header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
-	return header
+func makeAzureHeader(accessToken string) http.Header {
+	return makeAuthorizationHeader(tokenTypeBearer, accessToken, nil)
 }
 
 func getEmailFromJSON(json *simplejson.Json) (string, error) {
@@ -188,7 +185,7 @@ func (p *AzureProvider) GetEmailAddress(ctx context.Context, s *sessions.Session
 
 	json, err := requests.New(p.ProfileURL.String()).
 		WithContext(ctx).
-		WithHeaders(getAzureHeader(s.AccessToken)).
+		WithHeaders(makeAzureHeader(s.AccessToken)).
 		Do().
 		UnmarshalJSON()
 	if err != nil {
@@ -202,12 +199,12 @@ func (p *AzureProvider) GetEmailAddress(ctx context.Context, s *sessions.Session
 
 	email, err = json.Get("userPrincipalName").String()
 	if err != nil {
-		logger.Printf("failed making request %s", err)
+		logger.Errorf("failed making request %s", err)
 		return "", err
 	}
 
 	if email == "" {
-		logger.Printf("failed to get email address")
+		logger.Errorf("failed to get email address")
 		return "", err
 	}
 

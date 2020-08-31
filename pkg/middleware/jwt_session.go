@@ -57,7 +57,7 @@ func (j *jwtSessionLoader) loadSession(next http.Handler) http.Handler {
 
 		session, err := j.getJwtSession(req)
 		if err != nil {
-			logger.Printf("Error retrieving session from token in Authorization header: %v", err)
+			logger.Errorf("Error retrieving session from token in Authorization header: %v", err)
 		}
 
 		// Add the session to the scope if it was found
@@ -121,6 +121,7 @@ func (j *jwtSessionLoader) getBasicToken(token string) (string, error) {
 	// check user, user+password, or just password for a token
 	if j.jwtRegex.MatchString(user) {
 		// Support blank passwords or magic `x-oauth-basic` passwords - nothing else
+		/* #nosec G101 */
 		if password == "" || password == "x-oauth-basic" {
 			return user, nil
 		}
