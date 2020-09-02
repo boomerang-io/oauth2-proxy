@@ -12,6 +12,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/sessions"
+	"github.com/oauth2-proxy/oauth2-proxy/pkg/logger"
 	"github.com/oauth2-proxy/oauth2-proxy/pkg/requests"
 )
 
@@ -49,18 +50,18 @@ func (p *OIDCIBMW3idProvider) Redeem(ctx context.Context, redirectURL, code stri
 	}
 
 	// Added logging
-	//logger.Printf("Client ID: %s", p.ClientID)
-	//logger.Printf("Client Secret: %s", p.ClientSecret)
-	//logger.Printf("Token URL: %s", p.RedeemURL.String())
-	//logger.Printf("Redirect URL: %s", redirectURL)
-	//logger.Printf("Code: %s", code)
+	logger.Printf("Client ID: %s", p.ClientID)
+	logger.Printf("Client Secret: %s", p.ClientSecret)
+	logger.Printf("Token URL: %s", p.RedeemURL.String())
+	logger.Printf("Redirect URL: %s", redirectURL)
+	logger.Printf("Code: %s", code)
 
 	token, err := c.Exchange(ctx, code)
 	if err != nil {
 		return nil, fmt.Errorf("token exchange: %v", err)
 	}
 
-	//logger.Printf("Token: %v\n", token)
+	logger.Printf("Token: %v\n", token)
 
 	// in the initial exchange the id token is mandatory
 	idToken, err := p.findVerifiedIDToken(ctx, token)
@@ -81,14 +82,12 @@ func (p *OIDCIBMW3idProvider) Redeem(ctx context.Context, redirectURL, code stri
 // RefreshSessionIfNeeded checks if the session has expired and uses the
 // RefreshToken to fetch a new Access Token (and optional ID token) if required
 func (p *OIDCIBMW3idProvider) RefreshSessionIfNeeded(ctx context.Context, s *sessions.SessionState) (bool, error) {
-	//logger.Printf("RefreshSessionIfNeeded() - %v\n", s)
 	if s == nil || (s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())) || s.RefreshToken == "" {
 		return false, nil
 	}
 
 	err := p.redeemRefreshToken(ctx, s)
 	if err != nil {
-		fmt.Printf("RefreshSessionIfNeeded() - Error: %v\n", err)
 		return false, fmt.Errorf("unable to redeem refresh token: %v", err)
 	}
 
@@ -155,9 +154,9 @@ func (p *OIDCIBMW3idProvider) findVerifiedIDToken(ctx context.Context, token *oa
 	}
 
 	if rawIDToken, present := getIDToken(); present {
-		//logger.Printf("findVerifiedIDToken() - %v ", rawIDToken)
-		//logger.Printf("findVerifiedIDToken() isPresent - %v ", present)
-		//logger.Printf("findVerifiedIDToken() Verifier - %v ", p.Verifier)
+		logger.Printf("findVerifiedIDToken() - %v ", rawIDToken)
+		logger.Printf("findVerifiedIDToken() isPresent - %v ", present)
+		logger.Printf("findVerifiedIDToken() Verifier - %v ", p.Verifier)
 		verifiedIDToken, err := p.Verifier.Verify(ctx, rawIDToken)
 		return verifiedIDToken, err
 	}
@@ -168,12 +167,12 @@ func (p *OIDCIBMW3idProvider) createSessionState(ctx context.Context, token *oau
 
 	var newSession *sessions.SessionState
 
-	//logger.Printf("createSessionState() - rawIDToken: %v\n", idToken)
+	logger.Printf("createSessionState() - rawIDToken: %v\n", idToken)
 	if idToken == nil {
 		newSession = &sessions.SessionState{}
 	} else {
 		var err error
-		newSession, err = p.createSessionStateInternal(ctx, token.Extra("id_token").(string), idToken, token)
+		newSession, err = p.createSessionStateInternal(ctx, idToken, token)
 		if err != nil {
 			return nil, err
 		}
@@ -188,11 +187,9 @@ func (p *OIDCIBMW3idProvider) createSessionState(ctx context.Context, token *oau
 }
 
 func (p *OIDCIBMW3idProvider) CreateSessionStateFromBearerToken(ctx context.Context, rawIDToken string, idToken *oidc.IDToken) (*sessions.SessionState, error) {
-
-	//logger.Printf("ID Token: %v\n", idToken)
-	//logger.Printf("rawIDToken: %v\n", rawIDToken)
-
-	newSession, err := p.createSessionStateInternal(ctx, rawIDToken, idToken, nil)
+	logger.Printf("ID Token: %v\n", idToken)
+	logger.Printf("rawIDToken: %v\n", rawIDToken)
+	newSession, err := p.createSessionStateInternal(ctx, idToken, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -205,24 +202,22 @@ func (p *OIDCIBMW3idProvider) CreateSessionStateFromBearerToken(ctx context.Cont
 	return newSession, nil
 }
 
-func (p *OIDCIBMW3idProvider) createSessionStateInternal(ctx context.Context, rawIDToken string, idToken *oidc.IDToken, token *oauth2.Token) (*sessions.SessionState, error) {
-
-	//logger.Printf("createSessionStateInternal - ID Token: %v\n", idToken)
-	//logger.Printf("createSessionStateInternal - rawIDToken: %v\n", rawIDToken)
-
+func (p *OIDCIBMW3idProvider) createSessionStateInternal(ctx context.Context, idToken *oidc.IDToken, token *oauth2.Token) (*sessions.SessionState, error) {
+	logger.Printf("createSessionStateInternal - ID Token: %v\n", idToken)
+	logger.Printf("createSessionStateInternal - token: %v\n", token)
 	newSession := &sessions.SessionState{}
 
 	if idToken == nil {
 		return newSession, nil
 	}
-	accessToken := ""
-	if token != nil {
-		accessToken = token.AccessToken
-	}
 
-	claims, err := p.findClaimsFromIDToken(ctx, idToken, accessToken, p.ProfileURL.String())
+	claims, err := p.findClaimsFromIDToken(ctx, idToken, token)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't extract claims from id_token (%v)", err)
+	}
+
+	if token != nil {
+		newSession.IDToken = token.Extra("id_token").(string)
 	}
 
 	newSession.Email = claims.UserID // TODO Rename SessionState.Email to .UserID in the near future
@@ -236,12 +231,12 @@ func (p *OIDCIBMW3idProvider) createSessionStateInternal(ctx context.Context, ra
 		fmt.Errorf("Unable to Remove W3id Blue Groups in ID Token: %v", err)
 		bmrgIDToken = token.Extra("id_token").(string)
 	}
-	//logger.Printf("Boomerang IDToken: %s\n", bmrgIDToken)
+	logger.Printf("Boomerang IDToken: %s\n", bmrgIDToken)
 	newSession.IDToken = bmrgIDToken
 
-	verifyEmail := (p.UserIDClaim == "emailAddress") && !p.AllowUnverifiedEmail
+	verifyEmail := (p.UserIDClaim == emailClaim) && !p.AllowUnverifiedEmail
 	if verifyEmail && claims.Verified != nil && !*claims.Verified {
-		return nil, fmt.Errorf("emailAddress in id_token (%s) isn't verified", claims.UserID)
+		return nil, fmt.Errorf("email in id_token (%s) isn't verified", claims.UserID)
 	}
 
 	return newSession, nil
@@ -253,8 +248,7 @@ func (p *OIDCIBMW3idProvider) ValidateSessionState(ctx context.Context, s *sessi
 	return err == nil
 }
 
-func (p *OIDCIBMW3idProvider) findClaimsFromIDToken(ctx context.Context, idToken *oidc.IDToken, accessToken string, profileURL string) (*OIDCClaims, error) {
-
+func (p *OIDCIBMW3idProvider) findClaimsFromIDToken(ctx context.Context, idToken *oidc.IDToken, token *oauth2.Token) (*OIDCClaims, error) {
 	claims := &OIDCClaims{}
 	// Extract default claims.
 	if err := idToken.Claims(&claims); err != nil {
@@ -272,7 +266,15 @@ func (p *OIDCIBMW3idProvider) findClaimsFromIDToken(ctx context.Context, idToken
 
 	// userID claim was not present or was empty in the ID Token
 	if claims.UserID == "" {
-		if profileURL == "" {
+		// BearerToken case, allow empty UserID
+		// ProfileURL checks below won't work since we don't have an access token
+		if token == nil {
+			claims.UserID = claims.Subject
+			return claims, nil
+		}
+
+		profileURL := p.ProfileURL.String()
+		if profileURL == "" || token.AccessToken == "" {
 			return nil, fmt.Errorf("id_token did not contain user ID claim (%q)", p.UserIDClaim)
 		}
 
@@ -281,7 +283,7 @@ func (p *OIDCIBMW3idProvider) findClaimsFromIDToken(ctx context.Context, idToken
 		// Make a query to the userinfo endpoint, and attempt to locate the email from there.
 		respJSON, err := requests.New(profileURL).
 			WithContext(ctx).
-			WithHeaders(getOIDCHeader(accessToken)).
+			WithHeaders(makeOIDCHeader(token.AccessToken)).
 			Do().
 			UnmarshalJSON()
 		if err != nil {
@@ -308,7 +310,7 @@ func removeW3idBlueGroupsInIDToken(p string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("oidcibm removeW3idBlueGroupsInIDToken() - malformed jwt payload: %v", err)
 	}
-	//fmt.Printf("Original Payload: %q\n", bytePayload)
+	logger.Printf("Original Payload: %q\n", bytePayload)
 	var jsonPayload map[string]interface{}
 	json.Unmarshal(bytePayload, &jsonPayload)
 	for k := range jsonPayload {
@@ -317,7 +319,7 @@ func removeW3idBlueGroupsInIDToken(p string) (string, error) {
 		}
 	}
 	bytePayload2, err := json.Marshal(jsonPayload)
-	//fmt.Printf("Payload no BlueGroups: %q\n", bytePayload2)
+	logger.Printf("Payload no BlueGroups: %q\n", bytePayload2)
 	parts[1] = base64.RawURLEncoding.EncodeToString(bytePayload2)
 
 	return strings.Join(parts, "."), nil
