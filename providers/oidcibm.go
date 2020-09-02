@@ -12,7 +12,6 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/sessions"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/logger"
 	"github.com/oauth2-proxy/oauth2-proxy/pkg/requests"
 )
 
@@ -49,18 +48,18 @@ func (p *OIDCIBMidProvider) Redeem(ctx context.Context, redirectURL, code string
 		RedirectURL: redirectURL,
 	}
 	// Added logging
-	logger.Printf("Client ID: %s", p.ClientID)
-	logger.Printf("Client Secret: %s", p.ClientSecret)
-	logger.Printf("Token URL: %s", p.RedeemURL.String())
-	logger.Printf("Redirect URL: %s", redirectURL)
-	logger.Printf("Code: %s", code)
+	//logger.Printf("Client ID: %s", p.ClientID)
+	//logger.Printf("Client Secret: %s", p.ClientSecret)
+	//logger.Printf("Token URL: %s", p.RedeemURL.String())
+	//logger.Printf("Redirect URL: %s", redirectURL)
+	//logger.Printf("Code: %s", code)
 
 	token, err := c.Exchange(ctx, code)
 	if err != nil {
 		return nil, fmt.Errorf("token exchange: %v", err)
 	}
 
-	logger.Printf("Token: %v\n", token)
+	//logger.Printf("Token: %v\n", token)
 
 	// in the initial exchange the id token is mandatory
 	idToken, err := p.findVerifiedIDToken(ctx, token)
@@ -152,9 +151,9 @@ func (p *OIDCIBMidProvider) findVerifiedIDToken(ctx context.Context, token *oaut
 	}
 
 	if rawIDToken, present := getIDToken(); present {
-		logger.Printf("findVerifiedIDToken() - %v ", rawIDToken)
-		logger.Printf("findVerifiedIDToken() isPresent - %v ", present)
-		logger.Printf("findVerifiedIDToken() Verifier - %v ", p.Verifier)
+		//logger.Printf("findVerifiedIDToken() - %v ", rawIDToken)
+		//logger.Printf("findVerifiedIDToken() isPresent - %v ", present)
+		//logger.Printf("findVerifiedIDToken() Verifier - %v ", p.Verifier)
 		verifiedIDToken, err := p.Verifier.Verify(ctx, rawIDToken)
 		return verifiedIDToken, err
 	}
@@ -165,7 +164,7 @@ func (p *OIDCIBMidProvider) createSessionState(ctx context.Context, token *oauth
 
 	var newSession *sessions.SessionState
 
-	logger.Printf("createSessionState() - rawIDToken: %v\n", idToken)
+	//logger.Printf("createSessionState() - rawIDToken: %v\n", idToken)
 	if idToken == nil {
 		newSession = &sessions.SessionState{}
 	} else {
@@ -185,8 +184,8 @@ func (p *OIDCIBMidProvider) createSessionState(ctx context.Context, token *oauth
 }
 
 func (p *OIDCIBMidProvider) CreateSessionStateFromBearerToken(ctx context.Context, rawIDToken string, idToken *oidc.IDToken) (*sessions.SessionState, error) {
-	logger.Printf("ID Token: %v\n", idToken)
-	logger.Printf("rawIDToken: %v\n", rawIDToken)
+	//logger.Printf("ID Token: %v\n", idToken)
+	//logger.Printf("rawIDToken: %v\n", rawIDToken)
 	newSession, err := p.createSessionStateInternal(ctx, idToken, nil)
 	if err != nil {
 		return nil, err
@@ -201,8 +200,8 @@ func (p *OIDCIBMidProvider) CreateSessionStateFromBearerToken(ctx context.Contex
 }
 
 func (p *OIDCIBMidProvider) createSessionStateInternal(ctx context.Context, idToken *oidc.IDToken, token *oauth2.Token) (*sessions.SessionState, error) {
-	logger.Printf("createSessionStateInternal - ID Token: %v\n", idToken)
-	logger.Printf("createSessionStateInternal - token: %v\n", token)
+	//logger.Printf("createSessionStateInternal - ID Token: %v\n", idToken)
+	//logger.Printf("createSessionStateInternal - token: %v\n", token)
 	newSession := &sessions.SessionState{}
 
 	if idToken == nil {
@@ -229,7 +228,7 @@ func (p *OIDCIBMidProvider) createSessionStateInternal(ctx context.Context, idTo
 		fmt.Errorf("Unable to Remove IBMid Blue Groups in ID Token: %v", err)
 		bmrgIDToken = token.Extra("id_token").(string)
 	}
-	logger.Printf("Boomerang IDToken: %s\n", bmrgIDToken)
+	//logger.Printf("Boomerang IDToken: %s\n", bmrgIDToken)
 	newSession.IDToken = bmrgIDToken
 
 	verifyEmail := (p.UserIDClaim == emailClaim) && !p.AllowUnverifiedEmail
@@ -308,7 +307,7 @@ func removeIBMidBlueGroupsInIDToken(p string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("oidcibm removeIBMidBlueGroupsInIDToken() - malformed jwt payload: %v", err)
 	}
-	logger.Printf("Original Payload: %q\n", bytePayload)
+	//logger.Printf("Original Payload: %q\n", bytePayload)
 	var jsonPayload map[string]interface{}
 	json.Unmarshal(bytePayload, &jsonPayload)
 	for k := range jsonPayload {
@@ -325,7 +324,7 @@ func removeIBMidBlueGroupsInIDToken(p string) (string, error) {
 
 	}
 	bytePayload2, err := json.Marshal(jsonPayload)
-	logger.Printf("Payload no BlueGroups: %q\n", bytePayload2)
+	//logger.Printf("Payload no BlueGroups: %q\n", bytePayload2)
 	parts[1] = base64.RawURLEncoding.EncodeToString(bytePayload2)
 
 	return strings.Join(parts, "."), nil
