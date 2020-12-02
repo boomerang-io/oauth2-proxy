@@ -88,12 +88,14 @@ func TestSignAndValidate(t *testing.T) {
 	value := base64.URLEncoding.EncodeToString([]byte("I am soooo encoded"))
 	epoch := "123456789"
 
-	sha256sig := cookieSignature(sha256.New, seed, key, value, epoch)
-	sha1sig := cookieSignature(sha1.New, seed, key, value, epoch)
+	sha256sig, err := cookieSignature(sha256.New, seed, key, value, epoch)
+	assert.NoError(t, err)
+	sha1sig, err := cookieSignature(sha1.New, seed, key, value, epoch)
+	assert.NoError(t, err)
 
 	assert.True(t, checkSignature(sha256sig, seed, key, value, epoch))
-	// This should be switched to False after fully deprecating SHA1
-	assert.True(t, checkSignature(sha1sig, seed, key, value, epoch))
+	// We don't validate legacy SHA1 signatures anymore
+	assert.False(t, checkSignature(sha1sig, seed, key, value, epoch))
 
 	assert.False(t, checkSignature(sha256sig, seed, key, "tampered", epoch))
 	assert.False(t, checkSignature(sha1sig, seed, key, "tampered", epoch))

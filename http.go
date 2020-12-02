@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/options"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/logger"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/options"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/logger"
 )
 
 // Server represents an HTTP server
@@ -64,7 +64,7 @@ func (s *Server) ServeHTTPS() {
 	addr := s.Opts.HTTPSAddress
 	config := &tls.Config{
 		MinVersion: tls.VersionTLS12,
-		MaxVersion: tls.VersionTLS12,
+		MaxVersion: tls.VersionTLS13,
 	}
 	if config.NextProtos == nil {
 		config.NextProtos = []string{"http/1.1"}
@@ -106,7 +106,7 @@ func (s *Server) serve(listener net.Listener) {
 
 	err := srv.Serve(listener)
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		logger.Printf("ERROR: http.Serve() - %s", err)
+		logger.Errorf("ERROR: http.Serve() - %s", err)
 	}
 	<-idleConnsClosed
 }
@@ -119,12 +119,18 @@ type tcpKeepAliveListener struct {
 	*net.TCPListener
 }
 
-func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
+func (ln tcpKeepAliveListener) Accept() (net.Conn, error) {
 	tc, err := ln.AcceptTCP()
 	if err != nil {
-		return
+		return nil, err
 	}
-	tc.SetKeepAlive(true)
-	tc.SetKeepAlivePeriod(3 * time.Minute)
+	err = tc.SetKeepAlive(true)
+	if err != nil {
+		logger.Printf("Error setting Keep-Alive: %v", err)
+	}
+	err = tc.SetKeepAlivePeriod(3 * time.Minute)
+	if err != nil {
+		logger.Printf("Error setting Keep-Alive period: %v", err)
+	}
 	return tc, nil
 }

@@ -2,16 +2,18 @@ package providers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
 	oidc "github.com/coreos/go-oidc"
 	"golang.org/x/oauth2"
 
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/sessions"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/requests"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/logger"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/requests"
 )
 
 const emailClaim = "email"
@@ -20,9 +22,9 @@ const emailClaim = "email"
 type OIDCProvider struct {
 	*ProviderData
 
-	Verifier             *oidc.IDTokenVerifier
 	AllowUnverifiedEmail bool
 	UserIDClaim          string
+	GroupsClaim          string
 }
 
 // NewOIDCProvider initiates a new OIDCProvider
@@ -124,6 +126,7 @@ func (p *OIDCProvider) redeemRefreshToken(ctx context.Context, s *sessions.Sessi
 		s.IDToken = newSession.IDToken
 		s.Email = newSession.Email
 		s.User = newSession.User
+		s.Groups = newSession.Groups
 		s.PreferredUsername = newSession.PreferredUsername
 	}
 
@@ -157,7 +160,7 @@ func (p *OIDCProvider) createSessionState(ctx context.Context, token *oauth2.Tok
 		newSession = &sessions.SessionState{}
 	} else {
 		var err error
-		newSession, err = p.createSessionStateInternal(ctx, token.Extra("id_token").(string), idToken, token)
+		newSession, err = p.createSessionStateInternal(ctx, idToken, token)
 		if err != nil {
 			return nil, err
 		}
@@ -171,42 +174,46 @@ func (p *OIDCProvider) createSessionState(ctx context.Context, token *oauth2.Tok
 	return newSession, nil
 }
 
-func (p *OIDCProvider) CreateSessionStateFromBearerToken(ctx context.Context, rawIDToken string, idToken *oidc.IDToken) (*sessions.SessionState, error) {
-	newSession, err := p.createSessionStateInternal(ctx, rawIDToken, idToken, nil)
+func (p *OIDCProvider) CreateSessionFromToken(ctx context.Context, token string) (*sessions.SessionState, error) {
+	idToken, err := p.Verifier.Verify(ctx, token)
 	if err != nil {
 		return nil, err
 	}
 
-	newSession.AccessToken = rawIDToken
-	newSession.IDToken = rawIDToken
+	newSession, err := p.createSessionStateInternal(ctx, idToken, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	newSession.AccessToken = token
+	newSession.IDToken = token
 	newSession.RefreshToken = ""
 	newSession.ExpiresOn = &idToken.Expiry
 
 	return newSession, nil
 }
 
-func (p *OIDCProvider) createSessionStateInternal(ctx context.Context, rawIDToken string, idToken *oidc.IDToken, token *oauth2.Token) (*sessions.SessionState, error) {
+func (p *OIDCProvider) createSessionStateInternal(ctx context.Context, idToken *oidc.IDToken, token *oauth2.Token) (*sessions.SessionState, error) {
 
 	newSession := &sessions.SessionState{}
 
 	if idToken == nil {
 		return newSession, nil
 	}
-	accessToken := ""
-	if token != nil {
-		accessToken = token.AccessToken
-	}
 
-	claims, err := p.findClaimsFromIDToken(ctx, idToken, accessToken, p.ProfileURL.String())
+	claims, err := p.findClaimsFromIDToken(ctx, idToken, token)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't extract claims from id_token (%v)", err)
 	}
 
-	newSession.IDToken = rawIDToken
+	if token != nil {
+		newSession.IDToken = token.Extra("id_token").(string)
+	}
 
 	newSession.Email = claims.UserID // TODO Rename SessionState.Email to .UserID in the near future
 
 	newSession.User = claims.Subject
+	newSession.Groups = claims.Groups
 	newSession.PreferredUsername = claims.PreferredUsername
 
 	verifyEmail := (p.UserIDClaim == emailClaim) && !p.AllowUnverifiedEmail
@@ -218,21 +225,14 @@ func (p *OIDCProvider) createSessionStateInternal(ctx context.Context, rawIDToke
 }
 
 // ValidateSessionState checks that the session's IDToken is still valid
-func (p *OIDCProvider) ValidateSessionState(ctx context.Context, s *sessions.SessionState) bool {
+func (p *OIDCProvider) ValidateSession(ctx context.Context, s *sessions.SessionState) bool {
 	_, err := p.Verifier.Verify(ctx, s.IDToken)
 	return err == nil
 }
 
-func getOIDCHeader(accessToken string) http.Header {
-	header := make(http.Header)
-	header.Set("Accept", "application/json")
-	header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
-	return header
-}
-
-func (p *OIDCProvider) findClaimsFromIDToken(ctx context.Context, idToken *oidc.IDToken, accessToken string, profileURL string) (*OIDCClaims, error) {
-
+func (p *OIDCProvider) findClaimsFromIDToken(ctx context.Context, idToken *oidc.IDToken, token *oauth2.Token) (*OIDCClaims, error) {
 	claims := &OIDCClaims{}
+
 	// Extract default claims.
 	if err := idToken.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("failed to parse default id_token claims: %v", err)
@@ -247,9 +247,19 @@ func (p *OIDCProvider) findClaimsFromIDToken(ctx context.Context, idToken *oidc.
 		claims.UserID = fmt.Sprint(userID)
 	}
 
+	claims.Groups = p.extractGroupsFromRawClaims(claims.rawClaims)
+
 	// userID claim was not present or was empty in the ID Token
 	if claims.UserID == "" {
-		if profileURL == "" {
+		// BearerToken case, allow empty UserID
+		// ProfileURL checks below won't work since we don't have an access token
+		if token == nil {
+			claims.UserID = claims.Subject
+			return claims, nil
+		}
+
+		profileURL := p.ProfileURL.String()
+		if profileURL == "" || token.AccessToken == "" {
 			return nil, fmt.Errorf("id_token did not contain user ID claim (%q)", p.UserIDClaim)
 		}
 
@@ -258,7 +268,7 @@ func (p *OIDCProvider) findClaimsFromIDToken(ctx context.Context, idToken *oidc.
 		// Make a query to the userinfo endpoint, and attempt to locate the email from there.
 		respJSON, err := requests.New(profileURL).
 			WithContext(ctx).
-			WithHeaders(getOIDCHeader(accessToken)).
+			WithHeaders(makeOIDCHeader(token.AccessToken)).
 			Do().
 			UnmarshalJSON()
 		if err != nil {
@@ -276,10 +286,42 @@ func (p *OIDCProvider) findClaimsFromIDToken(ctx context.Context, idToken *oidc.
 	return claims, nil
 }
 
+func (p *OIDCProvider) extractGroupsFromRawClaims(rawClaims map[string]interface{}) []string {
+	groups := []string{}
+
+	rawGroups, ok := rawClaims[p.GroupsClaim].([]interface{})
+	if rawGroups != nil && ok {
+		for _, rawGroup := range rawGroups {
+			formattedGroup, err := formatGroup(rawGroup)
+			if err != nil {
+				logger.Errorf("unable to format group of type %s with error %s", reflect.TypeOf(rawGroup), err)
+				continue
+			}
+			groups = append(groups, formattedGroup)
+		}
+	}
+
+	return groups
+
+}
+
+func formatGroup(rawGroup interface{}) (string, error) {
+	group, ok := rawGroup.(string)
+	if !ok {
+		jsonGroup, err := json.Marshal(rawGroup)
+		if err != nil {
+			return "", err
+		}
+		group = string(jsonGroup)
+	}
+	return group, nil
+}
+
 type OIDCClaims struct {
 	rawClaims         map[string]interface{}
 	UserID            string
-	Subject           string `json:"sub"`
-	Verified          *bool  `json:"email_verified"`
-	PreferredUsername string `json:"preferred_username"`
+	Subject           string   `json:"sub"`
+	Verified          *bool    `json:"email_verified"`
+	PreferredUsername string   `json:"preferred_username"`
+	Groups            []string `json:"-"`
 }

@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/options"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/logger"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/options"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/logger"
 )
 
 // ProxyErrorHandler is a function that will be used to render error pages when
@@ -56,6 +56,7 @@ func (m *multiUpstreamProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request
 
 // registerStaticResponseHandler registers a static response handler with at the given path.
 func (m *multiUpstreamProxy) registerStaticResponseHandler(upstream options.Upstream) {
+	logger.Printf("mapping path %q => static response %d", upstream.Path, derefStaticCode(upstream.StaticCode))
 	m.serveMux.Handle(upstream.Path, newStaticResponseHandler(upstream.ID, upstream.StaticCode))
 }
 
@@ -74,7 +75,7 @@ func (m *multiUpstreamProxy) registerHTTPUpstreamProxy(upstream options.Upstream
 // NewProxyErrorHandler creates a ProxyErrorHandler using the template given.
 func NewProxyErrorHandler(errorTemplate *template.Template, proxyPrefix string) ProxyErrorHandler {
 	return func(rw http.ResponseWriter, req *http.Request, proxyErr error) {
-		logger.Printf("Error proxying to upstream server: %v", proxyErr)
+		logger.Errorf("Error proxying to upstream server: %v", proxyErr)
 		rw.WriteHeader(http.StatusBadGateway)
 		data := struct {
 			Title       string
@@ -85,6 +86,9 @@ func NewProxyErrorHandler(errorTemplate *template.Template, proxyPrefix string) 
 			Message:     "Error proxying to upstream server",
 			ProxyPrefix: proxyPrefix,
 		}
-		errorTemplate.Execute(rw, data)
+		err := errorTemplate.Execute(rw, data)
+		if err != nil {
+			http.Error(rw, "Internal Server Error", http.StatusInternalServerError)
+		}
 	}
 }

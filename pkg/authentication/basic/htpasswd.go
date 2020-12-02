@@ -1,14 +1,15 @@
 package basic
 
 import (
-	"crypto/sha1"
+	// We support SHA1 & bcrypt in HTPasswd
+	"crypto/sha1" // #nosec G505
 	"encoding/base64"
 	"encoding/csv"
 	"fmt"
 	"io"
 	"os"
 
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/logger"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/logger"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -29,11 +30,17 @@ type sha1Pass string
 // NewHTPasswdValidator constructs an httpasswd based validator from the file
 // at the path given.
 func NewHTPasswdValidator(path string) (Validator, error) {
-	r, err := os.Open(path)
+	// We allow HTPasswd location via config options
+	r, err := os.Open(path) // #nosec G304
 	if err != nil {
 		return nil, fmt.Errorf("could not open htpasswd file: %v", err)
 	}
-	defer r.Close()
+	defer func(c io.Closer) {
+		cerr := c.Close()
+		if cerr != nil {
+			logger.Fatalf("error closing the htpasswd file: %v", cerr)
+		}
+	}(r)
 	return newHtpasswd(r)
 }
 
@@ -71,7 +78,7 @@ func createHtpasswdMap(records [][]string) (*htpasswdMap, error) {
 
 		// Password is neither sha1 or bcrypt
 		// TODO(JoelSpeed): In the next breaking release, make this return an error.
-		logger.Printf("Invalid htpasswd entry for %s. Must be a SHA or bcrypt entry.", user)
+		logger.Errorf("Invalid htpasswd entry for %s. Must be a SHA or bcrypt entry.", user)
 	}
 	return h, nil
 }
@@ -83,13 +90,17 @@ func (h *htpasswdMap) Validate(user string, password string) bool {
 		return false
 	}
 
-	switch real := realPassword.(type) {
+	switch rp := realPassword.(type) {
 	case sha1Pass:
-		d := sha1.New()
-		d.Write([]byte(password))
-		return string(real) == base64.StdEncoding.EncodeToString(d.Sum(nil))
+		// We support SHA1 HTPasswd entries
+		d := sha1.New() // #nosec G401
+		_, err := d.Write([]byte(password))
+		if err != nil {
+			return false
+		}
+		return string(rp) == base64.StdEncoding.EncodeToString(d.Sum(nil))
 	case bcryptPass:
-		return bcrypt.CompareHashAndPassword([]byte(real), []byte(password)) == nil
+		return bcrypt.CompareHashAndPassword([]byte(rp), []byte(password)) == nil
 	default:
 		return false
 	}

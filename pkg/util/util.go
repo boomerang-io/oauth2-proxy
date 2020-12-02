@@ -4,6 +4,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 )
 
 func GetCertPool(paths []string) (*x509.CertPool, error) {
@@ -12,7 +13,8 @@ func GetCertPool(paths []string) (*x509.CertPool, error) {
 	}
 	pool := x509.NewCertPool()
 	for _, path := range paths {
-		data, err := ioutil.ReadFile(path)
+		// Cert paths are a configurable option
+		data, err := ioutil.ReadFile(path) // #nosec G304
 		if err != nil {
 			return nil, fmt.Errorf("certificate authority file (%s) could not be read - %s", path, err)
 		}
@@ -21,4 +23,13 @@ func GetCertPool(paths []string) (*x509.CertPool, error) {
 		}
 	}
 	return pool, nil
+}
+
+// GetRequestHost return the request host header or X-Forwarded-Host if present
+func GetRequestHost(req *http.Request) string {
+	host := req.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = req.Host
+	}
+	return host
 }

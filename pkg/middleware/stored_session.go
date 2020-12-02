@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/justinas/alice"
-	sessionsapi "github.com/oauth2-proxy/oauth2-proxy/pkg/apis/sessions"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/logger"
+	sessionsapi "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/logger"
 )
 
 // StoredSessionLoaderOptions cotnains all of the requirements to construct
@@ -55,7 +55,7 @@ type storedSessionLoader struct {
 }
 
 // loadSession attempts to load a session as identified by the request cookies.
-// If no session is found, the request will be passed to the nex handler.
+// If no session is found, the request will be passed to the next handler.
 // If a session was loader by a previous handler, it will not be replaced.
 func (s *storedSessionLoader) loadSession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
@@ -72,8 +72,11 @@ func (s *storedSessionLoader) loadSession(next http.Handler) http.Handler {
 		if err != nil {
 			// In the case when there was an error loading the session,
 			// we should clear the session
-			logger.Printf("Error loading cookied session: %v, removing session", err)
-			s.store.Clear(rw, req)
+			logger.Errorf("Error loading cookied session: %v, removing session", err)
+			err = s.store.Clear(rw, req)
+			if err != nil {
+				logger.Errorf("Error removing session: %v", err)
+			}
 		}
 
 		// Add the session to the scope if it was found

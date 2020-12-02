@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/options"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/sessions"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/options"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
 )
 
 // Manager wraps a Store and handles the implementation details of the
@@ -48,9 +48,8 @@ func (m *Manager) Save(rw http.ResponseWriter, req *http.Request, s *sessions.Se
 	if err != nil {
 		return err
 	}
-	tckt.setCookie(rw, req, s)
 
-	return nil
+	return tckt.setCookie(rw, req, s)
 }
 
 // Load reads sessions.SessionState information from a session store. It will

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/options"
-	sessionsapi "github.com/oauth2-proxy/oauth2-proxy/pkg/apis/sessions"
-	cookiesapi "github.com/oauth2-proxy/oauth2-proxy/pkg/cookies"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/encryption"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/options"
+	sessionsapi "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
+	cookiesapi "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/cookies"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/encryption"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -311,11 +311,12 @@ func SessionStoreInterfaceTests(in *testInput) {
 			BeforeEach(func() {
 				By("Using a valid cookie with a different providers session encoding")
 				broken := "BrokenSessionFromADifferentSessionImplementation"
-				value := encryption.SignedValue(in.cookieOpts.Secret, in.cookieOpts.Name, []byte(broken), time.Now())
+				value, err := encryption.SignedValue(in.cookieOpts.Secret, in.cookieOpts.Name, []byte(broken), time.Now())
+				Expect(err).ToNot(HaveOccurred())
 				cookie := cookiesapi.MakeCookieFromOptions(in.request, in.cookieOpts.Name, value, in.cookieOpts, in.cookieOpts.Expire, time.Now())
 				in.request.AddCookie(cookie)
 
-				err := in.ss().Save(in.response, in.request, in.session)
+				err = in.ss().Save(in.response, in.request, in.session)
 				Expect(err).ToNot(HaveOccurred())
 			})
 

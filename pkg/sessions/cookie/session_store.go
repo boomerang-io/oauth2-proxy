@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/options"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/sessions"
-	pkgcookies "github.com/oauth2-proxy/oauth2-proxy/pkg/cookies"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/encryption"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/logger"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/options"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
+	pkgcookies "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/cookies"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/encryption"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/logger"
 )
 
 const (
@@ -44,8 +44,7 @@ func (s *SessionStore) Save(rw http.ResponseWriter, req *http.Request, ss *sessi
 	if err != nil {
 		return err
 	}
-	s.setSessionCookie(rw, req, value, *ss.CreatedAt)
-	return nil
+	return s.setSessionCookie(rw, req, value, *ss.CreatedAt)
 }
 
 // Load reads sessions.SessionState information from Cookies within the
@@ -61,7 +60,7 @@ func (s *SessionStore) Load(req *http.Request) (*sessions.SessionState, error) {
 		return nil, errors.New("cookie signature not valid")
 	}
 
-	session, err := sessionFromCookie(val, s.CookieCipher)
+	session, err := sessions.DecodeSessionState(val, s.CookieCipher, true)
 	if err != nil {
 		return nil, err
 	}
@@ -99,39 +98,34 @@ func (s *SessionStore) cookieForSession(ss *sessions.SessionState) ([]byte, erro
 	return ss.EncodeSessionState(s.CookieCipher, true)
 }
 
-// sessionFromCookie deserializes a session from a cookie value
-func sessionFromCookie(v []byte, c encryption.Cipher) (s *sessions.SessionState, err error) {
-	ss, err := sessions.DecodeSessionState(v, c, true)
-	// If anything fails (Decrypt, LZ4, MessagePack), try legacy JSON decode
-	// LZ4 will likely fail for wrong header after AES-CFB spits out garbage
-	// data from trying to decrypt JSON it things is ciphertext
-	if err != nil {
-		// Legacy used Base64 + AES CFB
-		legacyCipher := encryption.NewBase64Cipher(c)
-		return sessions.LegacyV5DecodeSessionState(string(v), legacyCipher)
-	}
-	return ss, nil
-}
-
 // setSessionCookie adds the user's session cookie to the response
-func (s *SessionStore) setSessionCookie(rw http.ResponseWriter, req *http.Request, val []byte, created time.Time) {
-	for _, c := range s.makeSessionCookie(req, val, created) {
+func (s *SessionStore) setSessionCookie(rw http.ResponseWriter, req *http.Request, val []byte, created time.Time) error {
+	cookies, err := s.makeSessionCookie(req, val, created)
+	if err != nil {
+		return err
+	}
+	for _, c := range cookies {
 		http.SetCookie(rw, c)
 	}
+	return nil
 }
 
 // makeSessionCookie creates an http.Cookie containing the authenticated user's
 // authentication details
-func (s *SessionStore) makeSessionCookie(req *http.Request, value []byte, now time.Time) []*http.Cookie {
+func (s *SessionStore) makeSessionCookie(req *http.Request, value []byte, now time.Time) ([]*http.Cookie, error) {
 	strValue := string(value)
 	if strValue != "" {
-		strValue = encryption.SignedValue(s.Cookie.Secret, s.Cookie.Name, value, now)
+		var err error
+		strValue, err = encryption.SignedValue(s.Cookie.Secret, s.Cookie.Name, value, now)
+		if err != nil {
+			return nil, err
+		}
 	}
 	c := s.makeCookie(req, s.Cookie.Name, strValue, s.Cookie.Expire, now)
 	if len(c.String()) > maxCookieLength {
-		return splitCookie(c)
+		return splitCookie(c), nil
 	}
-	return []*http.Cookie{c}
+	return []*http.Cookie{c}, nil
 }
 
 func (s *SessionStore) makeCookie(req *http.Request, name string, value string, expiration time.Duration, now time.Time) *http.Cookie {
@@ -168,7 +162,7 @@ func splitCookie(c *http.Cookie) []*http.Cookie {
 		return []*http.Cookie{c}
 	}
 
-	logger.Printf("WARNING: Multiple cookies are required for this session as it exceeds the 4kb cookie limit. Please use server side session storage (eg. Redis) instead.")
+	logger.Errorf("WARNING: Multiple cookies are required for this session as it exceeds the 4kb cookie limit. Please use server side session storage (eg. Redis) instead.")
 
 	cookies := []*http.Cookie{}
 	valueBytes := []byte(c.Value)

@@ -7,11 +7,11 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/go-redis/redis/v7"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/options"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/sessions"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/logger"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/sessions/persistence"
+	"github.com/go-redis/redis/v8"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/options"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/logger"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/sessions/persistence"
 )
 
 // SessionStore is an implementation of the persistence.Store
@@ -23,7 +23,7 @@ type SessionStore struct {
 // NewRedisSessionStore initialises a new instance of the SessionStore and wraps
 // it in a persistence.Manager
 func NewRedisSessionStore(opts *options.SessionOptions, cookieOpts *options.Cookie) (sessions.SessionStore, error) {
-	client, err := newRedisClient(opts.Redis)
+	client, err := NewRedisClient(opts.Redis)
 	if err != nil {
 		return nil, fmt.Errorf("error constructing redis client: %v", err)
 	}
@@ -64,9 +64,9 @@ func (store *SessionStore) Clear(ctx context.Context, key string) error {
 	return nil
 }
 
-// newRedisClient makes a redis.Client (either standalone, sentinel aware, or
+// NewRedisClient makes a redis.Client (either standalone, sentinel aware, or
 // redis cluster)
-func newRedisClient(opts options.RedisStoreOptions) (Client, error) {
+func NewRedisClient(opts options.RedisStoreOptions) (Client, error) {
 	if opts.UseSentinel && opts.UseCluster {
 		return nil, fmt.Errorf("options redis-use-sentinel and redis-use-cluster are mutually exclusive")
 	}
@@ -88,8 +88,10 @@ func buildSentinelClient(opts options.RedisStoreOptions) (Client, error) {
 		return nil, fmt.Errorf("could not parse redis urls: %v", err)
 	}
 	client := redis.NewFailoverClient(&redis.FailoverOptions{
-		MasterName:    opts.SentinelMasterName,
-		SentinelAddrs: addrs,
+		MasterName:       opts.SentinelMasterName,
+		SentinelAddrs:    addrs,
+		SentinelPassword: opts.SentinelPassword,
+		Password:         opts.Password,
 	})
 	return newClient(client), nil
 }
@@ -101,7 +103,8 @@ func buildClusterClient(opts options.RedisStoreOptions) (Client, error) {
 		return nil, fmt.Errorf("could not parse redis urls: %v", err)
 	}
 	client := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs: addrs,
+		Addrs:    addrs,
+		Password: opts.Password,
 	})
 	return newClusterClient(client), nil
 }
@@ -114,6 +117,10 @@ func buildStandaloneClient(opts options.RedisStoreOptions) (Client, error) {
 		return nil, fmt.Errorf("unable to parse redis url: %s", err)
 	}
 
+	if opts.Password != "" {
+		opt.Password = opts.Password
+	}
+
 	if opts.InsecureSkipTLSVerify {
 		opt.TLSConfig.InsecureSkipVerify = true
 	}
@@ -121,7 +128,7 @@ func buildStandaloneClient(opts options.RedisStoreOptions) (Client, error) {
 	if opts.CAPath != "" {
 		rootCAs, err := x509.SystemCertPool()
 		if err != nil {
-			logger.Printf("failed to load system cert pool for redis connection, falling back to empty cert pool")
+			logger.Errorf("failed to load system cert pool for redis connection, falling back to empty cert pool")
 		}
 		if rootCAs == nil {
 			rootCAs = x509.NewCertPool()
@@ -133,7 +140,7 @@ func buildStandaloneClient(opts options.RedisStoreOptions) (Client, error) {
 
 		// Append our cert to the system pool
 		if ok := rootCAs.AppendCertsFromPEM(certs); !ok {
-			logger.Printf("no certs appended, using system certs only")
+			logger.Errorf("no certs appended, using system certs only")
 		}
 
 		opt.TLSConfig.RootCAs = rootCAs

@@ -3,12 +3,10 @@ package providers
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net/http"
 	"net/url"
 
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/sessions"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/requests"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/requests"
 )
 
 // FacebookProvider represents an Facebook based Identity Provider
@@ -63,14 +61,6 @@ func NewFacebookProvider(p *ProviderData) *FacebookProvider {
 	return &FacebookProvider{ProviderData: p}
 }
 
-func getFacebookHeader(accessToken string) http.Header {
-	header := make(http.Header)
-	header.Set("Accept", "application/json")
-	header.Set("x-li-format", "json")
-	header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
-	return header
-}
-
 // GetEmailAddress returns the Account email address
 func (p *FacebookProvider) GetEmailAddress(ctx context.Context, s *sessions.SessionState) (string, error) {
 	if s.AccessToken == "" {
@@ -85,7 +75,7 @@ func (p *FacebookProvider) GetEmailAddress(ctx context.Context, s *sessions.Sess
 	requestURL := p.ProfileURL.String() + "?fields=name,email"
 	err := requests.New(requestURL).
 		WithContext(ctx).
-		WithHeaders(getFacebookHeader(s.AccessToken)).
+		WithHeaders(makeOIDCHeader(s.AccessToken)).
 		Do().
 		UnmarshalInto(&r)
 	if err != nil {
@@ -99,6 +89,6 @@ func (p *FacebookProvider) GetEmailAddress(ctx context.Context, s *sessions.Sess
 }
 
 // ValidateSessionState validates the AccessToken
-func (p *FacebookProvider) ValidateSessionState(ctx context.Context, s *sessions.SessionState) bool {
-	return validateToken(ctx, p, s.AccessToken, getFacebookHeader(s.AccessToken))
+func (p *FacebookProvider) ValidateSession(ctx context.Context, s *sessions.SessionState) bool {
+	return validateToken(ctx, p, s.AccessToken, makeOIDCHeader(s.AccessToken))
 }

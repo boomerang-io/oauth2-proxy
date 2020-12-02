@@ -3,12 +3,10 @@ package providers
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net/http"
 	"net/url"
 
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/sessions"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/requests"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/requests"
 )
 
 // DigitalOceanProvider represents a DigitalOcean based Identity Provider
@@ -62,13 +60,6 @@ func NewDigitalOceanProvider(p *ProviderData) *DigitalOceanProvider {
 	return &DigitalOceanProvider{ProviderData: p}
 }
 
-func getDigitalOceanHeader(accessToken string) http.Header {
-	header := make(http.Header)
-	header.Set("Content-Type", "application/json")
-	header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
-	return header
-}
-
 // GetEmailAddress returns the Account email address
 func (p *DigitalOceanProvider) GetEmailAddress(ctx context.Context, s *sessions.SessionState) (string, error) {
 	if s.AccessToken == "" {
@@ -77,7 +68,7 @@ func (p *DigitalOceanProvider) GetEmailAddress(ctx context.Context, s *sessions.
 
 	json, err := requests.New(p.ProfileURL.String()).
 		WithContext(ctx).
-		WithHeaders(getDigitalOceanHeader(s.AccessToken)).
+		WithHeaders(makeOIDCHeader(s.AccessToken)).
 		Do().
 		UnmarshalJSON()
 	if err != nil {
@@ -91,7 +82,7 @@ func (p *DigitalOceanProvider) GetEmailAddress(ctx context.Context, s *sessions.
 	return email, nil
 }
 
-// ValidateSessionState validates the AccessToken
-func (p *DigitalOceanProvider) ValidateSessionState(ctx context.Context, s *sessions.SessionState) bool {
-	return validateToken(ctx, p, s.AccessToken, getDigitalOceanHeader(s.AccessToken))
+// ValidateSession validates the AccessToken
+func (p *DigitalOceanProvider) ValidateSession(ctx context.Context, s *sessions.SessionState) bool {
+	return validateToken(ctx, p, s.AccessToken, makeOIDCHeader(s.AccessToken))
 }
