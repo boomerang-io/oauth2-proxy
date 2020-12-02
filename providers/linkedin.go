@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/sessions"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/requests"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/requests"
 )
 
 // LinkedInProvider represents an LinkedIn based Identity Provider
@@ -94,6 +94,6 @@ func (p *LinkedInProvider) GetEmailAddress(ctx context.Context, s *sessions.Sess
 }
 
 // ValidateSessionState validates the AccessToken
-func (p *LinkedInProvider) ValidateSessionState(ctx context.Context, s *sessions.SessionState) bool {
+func (p *LinkedInProvider) ValidateSession(ctx context.Context, s *sessions.SessionState) bool {
 	return validateToken(ctx, p, s.AccessToken, makeLinkedInHeader(s.AccessToken))
 }

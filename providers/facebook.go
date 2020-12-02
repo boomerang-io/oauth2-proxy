@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/url"
 
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/sessions"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/requests"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/requests"
 )
 
 // FacebookProvider represents an Facebook based Identity Provider
@@ -89,6 +89,6 @@ func (p *FacebookProvider) GetEmailAddress(ctx context.Context, s *sessions.Sess
 }
 
 // ValidateSessionState validates the AccessToken
-func (p *FacebookProvider) ValidateSessionState(ctx context.Context, s *sessions.SessionState) bool {
+func (p *FacebookProvider) ValidateSession(ctx context.Context, s *sessions.SessionState) bool {
 	return validateToken(ctx, p, s.AccessToken, makeOIDCHeader(s.AccessToken))
 }

@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/apis/options"
-	"github.com/oauth2-proxy/oauth2-proxy/pkg/logger"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/options"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/logger"
 )
 
 // ProxyErrorHandler is a function that will be used to render error pages when
@@ -56,6 +56,7 @@ func (m *multiUpstreamProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request
 
 // registerStaticResponseHandler registers a static response handler with at the given path.
 func (m *multiUpstreamProxy) registerStaticResponseHandler(upstream options.Upstream) {
+	logger.Printf("mapping path %q => static response %d", upstream.Path, derefStaticCode(upstream.StaticCode))
 	m.serveMux.Handle(upstream.Path, newStaticResponseHandler(upstream.ID, upstream.StaticCode))
 }
 
