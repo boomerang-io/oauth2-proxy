@@ -633,6 +633,11 @@ func (p *OAuthProxy) SignInPage(rw http.ResponseWriter, req *http.Request, code 
 	}
 	rw.WriteHeader(code)
 
+	isAuthError := false
+	if code == http.StatusUnauthorized {
+		isAuthError = true
+	}
+
 	redirectURL, err := p.getAppRedirect(req)
 	if err != nil {
 		logger.Errorf("Error obtaining redirect: %v", err)
@@ -644,45 +649,7 @@ func (p *OAuthProxy) SignInPage(rw http.ResponseWriter, req *http.Request, code 
 		redirectURL = "/"
 	}
 
-	isAuthError := false
-	if code == http.StatusUnauthorized {
-		isAuthError = true
-	} else {
-		isAuthError = false
-	}
-
-	// We allow unescaped template.HTML since it is user configured options
-	/* #nosec G203 */
-	t := struct {
-		ProviderName  string
-		SignInMessage template.HTML
-		CustomLogin   bool
-		Redirect      string
-		Version       string
-		ProxyPrefix   string
-		Error         bool
-		FormAction    string
-		Footer        template.HTML
-	}{
-		ProviderName:  p.provider.Data().ProviderName,
-		SignInMessage: template.HTML(p.SignInMessage),
-		CustomLogin:   p.displayHtpasswdForm,
-		Redirect:      redirectURL,
-		Version:       VERSION,
-		ProxyPrefix:   p.ProxyPrefix,
-		Error:         isAuthError,
-		FormAction:    req.URL.RequestURI(),
-		Footer:        template.HTML(p.Footer),
-	}
-	if p.providerNameOverride != "" {
-		t.ProviderName = p.providerNameOverride
-	}
-	err = p.templates.ExecuteTemplate(rw, "sign_in.html", t)
-	if err != nil {
-		logger.Printf("Error rendering sign_in.html template: %v", err)
-		p.ErrorPage(rw, http.StatusInternalServerError, "Internal Server Error", err.Error())
-	}
-	p.pageWriter.WriteSignInPage(rw, req, redirectURL)
+	p.pageWriter.WriteSignInPage(rw, req, redirectURL, isAuthError)
 }
 
 // ManualSignIn handles basic auth logins to the proxy

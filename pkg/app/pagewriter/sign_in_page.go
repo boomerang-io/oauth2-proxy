@@ -54,7 +54,7 @@ type signInPageWriter struct {
 
 // WriteSignInPage writes the sign-in page to the given response writer.
 // It uses the redirectURL to be able to set the final destination for the user post login.
-func (s *signInPageWriter) WriteSignInPage(rw http.ResponseWriter, req *http.Request, redirectURL string) {
+func (s *signInPageWriter) WriteSignInPage(rw http.ResponseWriter, req *http.Request, redirectURL string, isAuthError bool) {
 	// We allow unescaped template.HTML since it is user configured options
 	/* #nosec G203 */
 	t := struct {
@@ -64,6 +64,7 @@ func (s *signInPageWriter) WriteSignInPage(rw http.ResponseWriter, req *http.Req
 		Redirect      string
 		Version       string
 		ProxyPrefix   string
+		Error         bool
 		Footer        template.HTML
 		LogoData      template.HTML
 	}{
@@ -73,6 +74,7 @@ func (s *signInPageWriter) WriteSignInPage(rw http.ResponseWriter, req *http.Req
 		Redirect:      redirectURL,
 		Version:       s.version,
 		ProxyPrefix:   s.proxyPrefix,
+		Error:         isAuthError,
 		Footer:        template.HTML(s.footer),
 		LogoData:      template.HTML(s.logoData),
 	}
