@@ -586,6 +586,13 @@ func (p *OAuthProxy) SignInPage(rw http.ResponseWriter, req *http.Request, code 
 		redirectURL = "/"
 	}
 
+	isAuthError := false
+	if code == http.StatusUnauthorized {
+		isAuthError = true
+	} else {
+		isAuthError = false
+	}
+
 	// We allow unescaped template.HTML since it is user configured options
 	/* #nosec G203 */
 	t := struct {
@@ -595,6 +602,8 @@ func (p *OAuthProxy) SignInPage(rw http.ResponseWriter, req *http.Request, code 
 		Redirect      string
 		Version       string
 		ProxyPrefix   string
+		Error         bool
+		FormAction    string
 		Footer        template.HTML
 	}{
 		ProviderName:  p.provider.Data().ProviderName,
@@ -603,6 +612,8 @@ func (p *OAuthProxy) SignInPage(rw http.ResponseWriter, req *http.Request, code 
 		Redirect:      redirectURL,
 		Version:       VERSION,
 		ProxyPrefix:   p.ProxyPrefix,
+		Error:         isAuthError,
+		FormAction:    req.URL.RequestURI(),
 		Footer:        template.HTML(p.Footer),
 	}
 	if p.providerNameOverride != "" {
@@ -657,7 +668,12 @@ func (p *OAuthProxy) SignIn(rw http.ResponseWriter, req *http.Request) {
 		if p.SkipProviderButton {
 			p.OAuthStart(rw, req)
 		} else {
-			p.SignInPage(rw, req, http.StatusOK)
+			user := req.FormValue("username")
+			if user == "" {
+				p.SignInPage(rw, req, http.StatusOK)
+			} else {
+				p.SignInPage(rw, req, http.StatusUnauthorized)
+			}
 		}
 	}
 }

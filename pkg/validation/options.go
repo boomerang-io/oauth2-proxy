@@ -289,6 +289,14 @@ func parseProviderInfo(o *options.Options, msgs []string) []string {
 		if p.Verifier == nil {
 			msgs = append(msgs, "oidc provider requires an oidc issuer URL")
 		}
+	case *providers.OIDCIBMidProvider:
+		if p.Verifier == nil {
+			msgs = append(msgs, "oidc ibmid provider requires an oidc issuer URL")
+		}
+	case *providers.OIDCIBMW3idProvider:
+		if p.Verifier == nil {
+			msgs = append(msgs, "oidc ibm w3id provider requires an oidc issuer URL")
+		}
 	case *providers.GitLabProvider:
 		p.Groups = o.GitLabGroup
 		err := p.AddProjects(o.GitlabProjects)

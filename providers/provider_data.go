@@ -151,6 +151,8 @@ func (p *ProviderData) buildSessionFromClaims(idToken *oidc.IDToken) (*sessions.
 		return nil, fmt.Errorf("couldn't extract claims from id_token (%v)", err)
 	}
 
+	logger.Printf("buildSessionFromClaims - claims.Groups: %v\n", claims.Groups)
+
 	ss.User = claims.Subject
 	ss.Email = claims.Email
 	ss.Groups = claims.Groups
