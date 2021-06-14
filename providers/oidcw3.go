@@ -134,7 +134,11 @@ func (p *OIDCIBMW3idProvider) RefreshSessionIfNeeded(ctx context.Context, s *ses
 	// Added logging
 	logger.Printf("RefreshSessionIfNeeded() - %v\n", s)
 
-	if s == nil || (s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())) || s.RefreshToken == "" {
+	// if s == nil || (s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())) || s.RefreshToken == "" {
+	// 	return false, nil
+	// }
+
+	if s == nil || (s.ExpiresOn != nil && s.CreatedAt.Add(time.Minute*5).After(time.Now())) || s.RefreshToken == "" {
 		return false, nil
 	}
 
