@@ -132,29 +132,31 @@ func (p *OIDCIBMW3idProvider) ValidateSession(ctx context.Context, s *sessions.S
 // RefreshToken to fetch a new Access Token (and optional ID token) if required
 func (p *OIDCIBMW3idProvider) RefreshSessionIfNeeded(ctx context.Context, s *sessions.SessionState) (bool, error) {
 	// Added logging
-	logger.Printf("RefreshSessionIfNeeded() - %v\n", s)
+	fmt.Printf("RefreshSessionIfNeeded() - %v\n", s)
+	fmt.Println("RefreshSessionIfNeeded() - s == nil || (s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())) || s.RefreshToken == ''",
+		s == nil || (s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())) || s.RefreshToken == "")
 
 	// if s == nil || (s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())) || s.RefreshToken == "" {
 	// 	return false, nil
 	// }
 
-	logger.Println("RefreshSessionIfNeeded() - s == nil || (s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())) || s.RefreshToken == ''",
+	fmt.Println("RefreshSessionIfNeeded() - s == nil || (s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())) || s.RefreshToken == ''",
 		s == nil || (s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())) || s.RefreshToken == "")
-	logger.Println("RefreshSessionIfNeeded() - s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())",
+	fmt.Println("RefreshSessionIfNeeded() - s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())",
 		s.ExpiresOn != nil && s.ExpiresOn.After(time.Now()))
-	logger.Println("RefreshSessionIfNeeded() - time.Now()", time.Now())
+	fmt.Println("RefreshSessionIfNeeded() - time.Now()", time.Now())
 	if s.ExpiresOn != nil {
-		logger.Println("RefreshSessionIfNeeded() - s.ExpiresOn", s.ExpiresOn)
+		fmt.Println("RefreshSessionIfNeeded() - s.ExpiresOn", s.ExpiresOn)
 	} else {
-		logger.Println("RefreshSessionIfNeeded() - s.ExpiresOn is nil")
+		fmt.Println("RefreshSessionIfNeeded() - s.ExpiresOn is nil")
 	}
 
-	logger.Println("RefreshSessionIfNeeded() - s.ExpiresOn != nil && !s.CreatedAt.Add(time.Minute*5).After(time.Now())",
+	fmt.Println("RefreshSessionIfNeeded() - s.ExpiresOn != nil && !s.CreatedAt.Add(time.Minute*5).After(time.Now())",
 		s.ExpiresOn != nil && !s.CreatedAt.Add(time.Minute*5).After(time.Now()))
-	logger.Println("RefreshSessionIfNeeded() - s.ExpiresOn != nil && s.CreatedAt.Add(time.Minute*5).After(time.Now())",
+	fmt.Println("RefreshSessionIfNeeded() - s.ExpiresOn != nil && s.CreatedAt.Add(time.Minute*5).After(time.Now())",
 		s.ExpiresOn != nil && s.CreatedAt.Add(time.Minute*5).After(time.Now()))
 
-	if s == nil || (s.ExpiresOn != nil && !s.CreatedAt.Add(time.Minute*5).After(time.Now())) || s.RefreshToken == "" {
+	if s == nil || (s.ExpiresOn != nil && !s.CreatedAt.Add(time.Second*299).After(time.Now())) || s.RefreshToken == "" {
 		return false, nil
 	}
 
@@ -162,6 +164,8 @@ func (p *OIDCIBMW3idProvider) RefreshSessionIfNeeded(ctx context.Context, s *ses
 	if err != nil {
 		return false, fmt.Errorf("unable to redeem refresh token: %v", err)
 	}
+
+	fmt.Println("Refreshed Session:", s)
 
 	logger.Printf("refreshed session: %s", s)
 	return true, nil
