@@ -136,15 +136,11 @@ func (p *OIDCIBMW3idProvider) RefreshSessionIfNeeded(ctx context.Context, s *ses
 	fmt.Println("RefreshSessionIfNeeded() - s == nil || (s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())) || s.RefreshToken == ''",
 		s == nil || (s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())) || s.RefreshToken == "")
 
-	// if s == nil || (s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())) || s.RefreshToken == "" {
-	// 	return false, nil
-	// }
-
-	fmt.Println("RefreshSessionIfNeeded() - s == nil || (s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())) || s.RefreshToken == ''",
-		s == nil || (s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())) || s.RefreshToken == "")
+	fmt.Println("RefreshSessionIfNeeded() - s == nil || (s.ExpiresOn != nil && s.ExpiresOn.Before(time.Now())) || s.RefreshToken == ''",
+		s == nil || (s.ExpiresOn != nil && s.ExpiresOn.Before(time.Now())) || s.RefreshToken == "")
 	fmt.Println("RefreshSessionIfNeeded() - s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())",
 		s.ExpiresOn != nil && s.ExpiresOn.After(time.Now()))
-	fmt.Println("RefreshSessionIfNeeded() - time.Now()", time.Now())
+	fmt.Printf("RefreshSessionIfNeeded() - time.Now(): %s - s.ExpiresOn: %s", time.Now(), s.ExpiresOn)
 	if s.ExpiresOn != nil {
 		fmt.Println("RefreshSessionIfNeeded() - s.ExpiresOn", s.ExpiresOn)
 	} else {
@@ -156,7 +152,7 @@ func (p *OIDCIBMW3idProvider) RefreshSessionIfNeeded(ctx context.Context, s *ses
 	fmt.Println("RefreshSessionIfNeeded() - s.ExpiresOn != nil && s.CreatedAt.Add(time.Minute*5).After(time.Now())",
 		s.ExpiresOn != nil && s.CreatedAt.Add(time.Minute*5).After(time.Now()))
 
-	if s == nil || (s.ExpiresOn != nil && !s.CreatedAt.Add(time.Second*299).After(time.Now())) || s.RefreshToken == "" {
+	if s == nil || (s.ExpiresOn != nil && s.ExpiresOn.Before(time.Now())) || s.RefreshToken == "" {
 		return false, nil
 	}
 
