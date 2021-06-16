@@ -900,11 +900,16 @@ func (p *OAuthProxy) AuthOnly(rw http.ResponseWriter, req *http.Request) {
 	p.headersChain.Then(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(http.StatusAccepted)
 	})).ServeHTTP(rw, req)
+
+	fmt.Printf("AuthOnly req: %v", req.Header)
+	fmt.Printf("AuthOnly rw: %v", rw.Header())
 }
 
 // SkipAuthProxy proxies allowlisted requests and skips authentication
 func (p *OAuthProxy) SkipAuthProxy(rw http.ResponseWriter, req *http.Request) {
 	p.headersChain.Then(p.serveMux).ServeHTTP(rw, req)
+	fmt.Printf("SkipAuthProxy req: %v", req.Header)
+	fmt.Printf("SkipAuthProxy rw: %v", rw.Header())
 }
 
 // Proxy proxies the user request if the user is authenticated else it prompts
