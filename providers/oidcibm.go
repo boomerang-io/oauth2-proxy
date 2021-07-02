@@ -182,9 +182,9 @@ func (p *OIDCIBMidProvider) redeemRefreshToken(ctx context.Context, s *sessions.
 	// It's possible that if the refresh token isn't in the token response the
 	// session will not contain an id token.
 	// If it doesn't it's probably better to retain the old one
-	fmt.Println("redeemRefreshToken() - newSession.IDToken:", newSession.IDToken)
+	// fmt.Println("redeemRefreshToken() - newSession.IDToken:", newSession.IDToken)
 	if newSession.IDToken != "" {
-		fmt.Println("redeemRefreshToken() - s.IDToken (newSession.IDToken != \"\"):", s.IDToken)
+		// fmt.Println("redeemRefreshToken() - s.IDToken (newSession.IDToken != \"\"):", s.IDToken)
 		s.IDToken = newSession.IDToken
 		s.Email = newSession.Email
 		s.User = newSession.User
@@ -197,15 +197,15 @@ func (p *OIDCIBMidProvider) redeemRefreshToken(ctx context.Context, s *sessions.
 	s.CreatedAt = newSession.CreatedAt
 	s.ExpiresOn = newSession.ExpiresOn
 
-	fmt.Println("redeemRefreshToken() - s.IDToken:", s.IDToken)
-	fmt.Println("redeemRefreshToken() - s.Email:", s.Email)
-	fmt.Println("redeemRefreshToken() - s.User:", s.User)
-	fmt.Println("redeemRefreshToken() - s.Groups:", s.Groups)
-	fmt.Println("redeemRefreshToken() - s.PreferredUsername:", s.PreferredUsername)
-	fmt.Println("redeemRefreshToken() - s.AccessToken:", s.AccessToken)
-	fmt.Println("redeemRefreshToken() - s.RefreshToken:", s.RefreshToken)
-	fmt.Println("redeemRefreshToken() - s.CreatedAt:", s.CreatedAt)
-	fmt.Println("redeemRefreshToken() - s.ExpiresOn:", s.ExpiresOn)
+	// fmt.Println("redeemRefreshToken() - s.IDToken:", s.IDToken)
+	// fmt.Println("redeemRefreshToken() - s.Email:", s.Email)
+	// fmt.Println("redeemRefreshToken() - s.User:", s.User)
+	// fmt.Println("redeemRefreshToken() - s.Groups:", s.Groups)
+	// fmt.Println("redeemRefreshToken() - s.PreferredUsername:", s.PreferredUsername)
+	// fmt.Println("redeemRefreshToken() - s.AccessToken:", s.AccessToken)
+	// fmt.Println("redeemRefreshToken() - s.RefreshToken:", s.RefreshToken)
+	// fmt.Println("redeemRefreshToken() - s.CreatedAt:", s.CreatedAt)
+	// fmt.Println("redeemRefreshToken() - s.ExpiresOn:", s.ExpiresOn)
 
 	return nil
 }
