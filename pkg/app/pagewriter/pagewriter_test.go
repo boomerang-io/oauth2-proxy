@@ -54,7 +54,7 @@ var _ = Describe("Writer", func() {
 
 			It("Writes the default sign in template", func() {
 				recorder := httptest.NewRecorder()
-				writer.WriteSignInPage(recorder, request, "/redirect")
+				writer.WriteSignInPage(recorder, request, "/redirect", false)
 
 				body, err := ioutil.ReadAll(recorder.Result().Body)
 				Expect(err).ToNot(HaveOccurred())
@@ -101,7 +101,7 @@ var _ = Describe("Writer", func() {
 
 			It("Writes the custom sign in template", func() {
 				recorder := httptest.NewRecorder()
-				writer.WriteSignInPage(recorder, request, "/redirect")
+				writer.WriteSignInPage(recorder, request, "/redirect", false)
 
 				body, err := ioutil.ReadAll(recorder.Result().Body)
 				Expect(err).ToNot(HaveOccurred())
