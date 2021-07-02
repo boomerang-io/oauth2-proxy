@@ -900,11 +900,16 @@ func (p *OAuthProxy) AuthOnly(rw http.ResponseWriter, req *http.Request) {
 	p.headersChain.Then(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(http.StatusAccepted)
 	})).ServeHTTP(rw, req)
+
+	fmt.Printf("AuthOnly req: %v", req.Header)
+	fmt.Printf("AuthOnly rw: %v", rw.Header())
 }
 
 // SkipAuthProxy proxies allowlisted requests and skips authentication
 func (p *OAuthProxy) SkipAuthProxy(rw http.ResponseWriter, req *http.Request) {
 	p.headersChain.Then(p.serveMux).ServeHTTP(rw, req)
+	fmt.Printf("SkipAuthProxy req: %v", req.Header)
+	fmt.Printf("SkipAuthProxy rw: %v", rw.Header())
 }
 
 // Proxy proxies the user request if the user is authenticated else it prompts
@@ -916,6 +921,8 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 		// we are authenticated
 		p.addHeadersForProxying(rw, session)
 		p.headersChain.Then(p.serveMux).ServeHTTP(rw, req)
+		fmt.Printf("Proxy() - Header req: %v", req.Header)
+		fmt.Printf("Proxy() - Header rw: %v", rw.Header())
 	case ErrNeedsLogin:
 		// we need to send the user to a login screen
 		if isAjax(req) {

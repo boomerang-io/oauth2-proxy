@@ -68,6 +68,7 @@ var _ = Describe("SignIn Page", func() {
 				signInPage.template = tmpl
 
 				recorder := httptest.NewRecorder()
+        
 				signInPage.WriteSignInPage(recorder, request, "/redirect", true)
 
 				body, err := ioutil.ReadAll(recorder.Result().Body)
