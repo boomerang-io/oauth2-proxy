@@ -46,11 +46,11 @@ func (p *OIDCIBMidProvider) Redeem(ctx context.Context, redirectURL, code string
 	}
 
 	// Added logging
-	logger.Printf("Client ID: %s", p.ClientID)
-	logger.Printf("Client Secret: %s", p.ClientSecret)
-	logger.Printf("Token URL: %s", p.RedeemURL.String())
-	logger.Printf("Redirect URL: %s", redirectURL)
-	logger.Printf("Code: %s", code)
+	// logger.Printf("Client ID: %s", p.ClientID)
+	// logger.Printf("Client Secret: %s", p.ClientSecret)
+	// logger.Printf("Token URL: %s", p.RedeemURL.String())
+	// logger.Printf("Redirect URL: %s", redirectURL)
+	// logger.Printf("Code: %s", code)
 
 	token, err := c.Exchange(ctx, code)
 	if err != nil {
@@ -58,7 +58,7 @@ func (p *OIDCIBMidProvider) Redeem(ctx context.Context, redirectURL, code string
 	}
 
 	// Added logging
-	logger.Printf("Token: %v\n", token)
+	// logger.Printf("Token: %v\n", token)
 
 	return p.createSession(ctx, token, false)
 }
@@ -131,7 +131,7 @@ func (p *OIDCIBMidProvider) ValidateSession(ctx context.Context, s *sessions.Ses
 // RefreshToken to fetch a new Access Token (and optional ID token) if required
 func (p *OIDCIBMidProvider) RefreshSessionIfNeeded(ctx context.Context, s *sessions.SessionState) (bool, error) {
 	// Added logging
-	logger.Printf("RefreshSessionIfNeeded() - %v\n", s)
+	// logger.Printf("RefreshSessionIfNeeded() - %v\n", s)
 
 	if s == nil || (s.ExpiresOn != nil && s.ExpiresOn.After(time.Now())) || s.RefreshToken == "" {
 		return false, nil
@@ -142,7 +142,7 @@ func (p *OIDCIBMidProvider) RefreshSessionIfNeeded(ctx context.Context, s *sessi
 		return false, fmt.Errorf("unable to redeem refresh token: %v", err)
 	}
 
-	logger.Printf("refreshed session: %s", s)
+	// logger.Printf("refreshed session: %s", s)
 	return true, nil
 }
 
@@ -168,7 +168,7 @@ func (p *OIDCIBMidProvider) redeemRefreshToken(ctx context.Context, s *sessions.
 	token, err := c.TokenSource(ctx, t).Token()
 
 	// Added logging
-	fmt.Printf("redeemRefreshToken() - token: %v\n", token)
+	// fmt.Printf("redeemRefreshToken() - token: %v\n", token)
 
 	if err != nil {
 		return fmt.Errorf("failed to get token: %v", err)
@@ -213,7 +213,7 @@ func (p *OIDCIBMidProvider) redeemRefreshToken(ctx context.Context, s *sessions.
 // CreateSessionFromToken converts Bearer IDTokens into sessions
 func (p *OIDCIBMidProvider) CreateSessionFromToken(ctx context.Context, token string) (*sessions.SessionState, error) {
 	// Added logging
-	logger.Printf("Token: %v\n", token)
+	// logger.Printf("Token: %v\n", token)
 
 	idToken, err := p.Verifier.Verify(ctx, token)
 	if err != nil {
@@ -221,7 +221,7 @@ func (p *OIDCIBMidProvider) CreateSessionFromToken(ctx context.Context, token st
 	}
 
 	// Added logging
-	logger.Printf("Token: %v\n", idToken)
+	// logger.Printf("Token: %v\n", idToken)
 
 	ss, err := p.buildSessionFromClaims(idToken)
 	if err != nil {
@@ -271,7 +271,7 @@ func (p *OIDCIBMidProvider) createSession(ctx context.Context, token *oauth2.Tok
 		logger.Errorf("Unable to Remove IBMid Blue Groups in ID Token: %v", err)
 		bmrgIDToken = token.Extra("id_token").(string)
 	}
-	logger.Printf("Boomerang IDToken: %s\n", bmrgIDToken)
+	// logger.Printf("Boomerang IDToken: %s\n", bmrgIDToken)
 	ss.IDToken = bmrgIDToken
 
 	// ss.IDToken = getIDToken(token)

@@ -46,11 +46,11 @@ func (p *OIDCIBMW3idProvider) Redeem(ctx context.Context, redirectURL, code stri
 	}
 
 	// Added logging
-	logger.Printf("Client ID: %s", p.ClientID)
-	logger.Printf("Client Secret: %s", p.ClientSecret)
-	logger.Printf("Token URL: %s", p.RedeemURL.String())
-	logger.Printf("Redirect URL: %s", redirectURL)
-	logger.Printf("Code: %s", code)
+	// logger.Printf("Client ID: %s", p.ClientID)
+	// logger.Printf("Client Secret: %s", p.ClientSecret)
+	// logger.Printf("Token URL: %s", p.RedeemURL.String())
+	// logger.Printf("Redirect URL: %s", redirectURL)
+	// logger.Printf("Code: %s", code)
 
 	token, err := c.Exchange(ctx, code)
 	if err != nil {
@@ -58,8 +58,8 @@ func (p *OIDCIBMW3idProvider) Redeem(ctx context.Context, redirectURL, code stri
 	}
 
 	// Added logging
-	logger.Printf("Redeem - Token: %v\n", token)
-	logger.Printf("Redeem - GroupsClaim: %v\n", p.GroupsClaim)
+	// logger.Printf("Redeem - Token: %v\n", token)
+	// logger.Printf("Redeem - GroupsClaim: %v\n", p.GroupsClaim)
 
 	return p.createSession(ctx, token, false)
 }
@@ -226,7 +226,7 @@ func (p *OIDCIBMW3idProvider) redeemRefreshToken(ctx context.Context, s *session
 // CreateSessionFromToken converts Bearer IDTokens into sessions
 func (p *OIDCIBMW3idProvider) CreateSessionFromToken(ctx context.Context, token string) (*sessions.SessionState, error) {
 	// Added logging
-	logger.Printf("First Token: %v\n", token)
+	// logger.Printf("First Token: %v\n", token)
 
 	idToken, err := p.Verifier.Verify(ctx, token)
 	if err != nil {
@@ -234,7 +234,7 @@ func (p *OIDCIBMW3idProvider) CreateSessionFromToken(ctx context.Context, token 
 	}
 
 	// Added logging
-	logger.Printf("CreateSessionFromToken - Token: %v\n", idToken)
+	// logger.Printf("CreateSessionFromToken - Token: %v\n", idToken)
 
 	ss, err := p.buildSessionFromClaims(idToken)
 	if err != nil {
@@ -284,7 +284,7 @@ func (p *OIDCIBMW3idProvider) createSession(ctx context.Context, token *oauth2.T
 		logger.Errorf("Unable to Remove W3id Blue Groups in ID Token: %v", err)
 		bmrgIDToken = token.Extra("id_token").(string)
 	}
-	logger.Printf("Boomerang IDToken: %s\n", bmrgIDToken)
+	// logger.Printf("Boomerang IDToken: %s\n", bmrgIDToken)
 	ss.IDToken = bmrgIDToken
 
 	// ss.IDToken = getIDToken(token)
